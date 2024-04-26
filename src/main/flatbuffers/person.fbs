@@ -1,0 +1,13 @@
+namespace io.confluent.developer.flatbuffer;
+
+file_extension "ext";
+
+
+table Person {
+
+ name: string;
+ address: string;
+ email: string;
+ age: int8;
+
+}

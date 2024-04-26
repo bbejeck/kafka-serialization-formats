@@ -1,0 +1,15 @@
+namespace io.confluent.developer.flatbuffer;
+
+file_extension "ext";
+
+
+enum TxnType : byte {BUY = 0, SELL = 1}
+
+table Stock {
+    price:double;
+    shares:long;
+    symbol:string;
+    exchange:string;
+    full_name:string;
+    type:TxnType;
+}
