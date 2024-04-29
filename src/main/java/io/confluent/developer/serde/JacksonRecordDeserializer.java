@@ -1,4 +1,4 @@
-package io.confluent.developer.consumer;
+package io.confluent.developer.serde;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.developer.Stock;
@@ -13,8 +13,6 @@ import java.io.IOException;
  */
 public class JacksonRecordDeserializer implements Deserializer<Stock> {
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    public JacksonRecordDeserializer() {}
 
     @Override
     public Stock deserialize(String s, byte[] bytes) {

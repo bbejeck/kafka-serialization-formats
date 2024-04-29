@@ -1,22 +1,25 @@
 package io.confluent.developer.producer;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.flatbuffers.FlatBufferBuilder;
-import io.confluent.developer.TxnType;
-import io.confluent.developer.flatbuffer.Stock;
+import io.confluent.developer.serde.FlatbufferSerializer;
+import io.confluent.developer.serde.JacksonRecordSerializer;
+import io.confluent.developer.supplier.FlatbufferStockRecordSupplier;
+import io.confluent.developer.supplier.JavaRecordStockSupplier;
+import io.confluent.developer.supplier.ProtoStockSupplier;
 import io.confluent.developer.util.Utils;
-import net.datafaker.Faker;
+import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * User: Bill Bejeck
@@ -24,79 +27,55 @@ import java.util.Properties;
  * Time: 4:21 PM
  */
 public class ProducerRunner {
-    private static final Logger LOG = LoggerFactory.getLogger(ProducerRunner.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final String FLATBUFFER = "flatbuffer";
+    private static final String RECORD = "record";
+    private static final String PROTO = "proto";
 
-    public static void main(String[] args) throws Exception {
-        
+    public static void main(String[] args) {
+
         if (args.length == 0) {
-            System.out.println("Usage ProducerRunner flatbuffer|record numRecords");
+            System.out.println("Usage ProducerRunner flatbuffer|record|proto|avro numRecords");
             System.exit(1);
         }
-        String messageType = args[0];
+        String messageType = args[0].toLowerCase();
         int numRecords = Integer.parseInt(args[1]);
-        if (messageType.equals("flatbuffer")) {
-             produceFlatbuffer(numRecords);
-        } else if (messageType.equals("record")) {
-             produceRecord(numRecords);
-        } else {
-            System.out.println("Invalid message type");
-            System.exit(1);
-        }
-
-    }
-
-    private static void produceFlatbuffer(int numRecords) {
         Properties props = Utils.getProperties();
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        Faker faker = new Faker();
-        FlatBufferBuilder builder = new FlatBufferBuilder();
-        Instant now = Instant.now();
-        try(Producer<byte[], byte[]> producer = new KafkaProducer<>(props)) {
-           for (int i = 0; i < numRecords; i++) {
-               Stock.startStock(builder);
-               int symbolName = builder.createString(faker.stock().nsdqSymbol());
-               int exchangeName = builder.createString(faker.stock().exchanges());
-               int fullName = builder.createString(faker.company().name());
-               int type = TxnType.values()[faker.number().numberBetween(0,2)].ordinal();
-               int stock = Stock.createStock(builder, faker.number().randomDouble(2,1,200), faker.number().numberBetween(100, 10_000), symbolName, exchangeName, fullName, (byte) type);
-               builder.finish(stock);
-               producer.send(new ProducerRecord<>("flatbuffer-input", builder.sizedByteArray()), (metadata, exception) -> {
-                   if (exception != null) {
-                       LOG.error("Error producing message", exception);
-                   }
-               });
-               builder.clear();
-           }
-           Instant after = Instant.now();
-           System.out.printf("Producing Flatbuffer records Took %d milliseconds %n", after.toEpochMilli() - now.toEpochMilli())   ;
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        switch (messageType) {
+            case FLATBUFFER -> {
+                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, FlatbufferSerializer.class);
+                produceRecords(numRecords, "flatbuffer-input", new FlatbufferStockRecordSupplier(), props);
+            }
+            case RECORD -> {
+                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JacksonRecordSerializer.class);
+                produceRecords(numRecords, "record-input", new JavaRecordStockSupplier(), props);
+            }
+            case PROTO -> {
+                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaProtobufSerializer.class);
+                props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, true);
+                produceRecords(numRecords, "proto-input", new ProtoStockSupplier(), props);
+            }
+
+            default -> System.out.println("Invalid message type: " + messageType);
         }
     }
 
-    private static void produceRecord(int numRecords) throws JsonProcessingException {
-        Properties props = Utils.getProperties();
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        Faker faker = new Faker();
-        Instant now = Instant.now();
-        try(Producer<byte[], byte[]> producer = new KafkaProducer<>(props)) {
+    private static <V> void produceRecords(int numRecords, String topic, Supplier<V> recordSupplier, Properties props) {
+        Instant start = Instant.now();
+        AtomicInteger counter = new AtomicInteger(1);
+        try (Producer<byte[], V> producer = new KafkaProducer<>(props)) {
             for (int i = 0; i < numRecords; i++) {
-                io.confluent.developer.Stock stock = new io.confluent.developer.Stock(faker.number().randomDouble(2,1,200),
-                        faker.number().numberBetween(100, 10_000),
-                        faker.stock().nsdqSymbol(),
-                        faker.stock().exchanges(),
-                        faker.company().name(),
-                        TxnType.values()[faker.number().numberBetween(0,2)]);
-
-                producer.send(new ProducerRecord<>("record-input",MAPPER.writeValueAsBytes(stock)), (metadata, exception) -> {
+                producer.send(new ProducerRecord<>(topic, recordSupplier.get()), (metadata, exception) -> {
                     if (exception != null) {
-                        LOG.error("Error producing message", exception);
+                        System.out.printf("Error producing message %s%n", exception);
+                    }
+                    if (counter.getAndIncrement() % 1_000_000 == 0) {
+                        System.out.printf("Produced %d records%n", counter.get());
                     }
                 });
             }
             Instant after = Instant.now();
-            System.out.printf("Producing Java Records with Serialization Took %d milliseconds %n", after.toEpochMilli() - now.toEpochMilli());
+            System.out.printf("Producing records Took %d milliseconds %n", after.toEpochMilli() - start.toEpochMilli());
         }
     }
 }

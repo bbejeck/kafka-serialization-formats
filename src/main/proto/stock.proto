@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package io.confluent.developer.proto;
+
+option java_multiple_files = true;
+option java_outer_classname = "StockProtoOuter";
+
+enum TxnType {
+    BUY = 0;
+    SELL = 1;
+}
+
+message StockProto {
+  double price = 1;
+  int64 shares = 2;
+  string symbol = 3;
+  string exchange = 4;
+  string full_name = 5;
+  TxnType txn = 6;
+}
