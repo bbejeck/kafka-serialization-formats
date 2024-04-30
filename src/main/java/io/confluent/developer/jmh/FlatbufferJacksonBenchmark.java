@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.confluent.developer.TxnType;
-import io.confluent.developer.flatbuffer.Stock;
+import io.confluent.developer.flatbuffer.StockFlatbuffer;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 
@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 public class FlatbufferJacksonBenchmark {
 
     public ObjectMapper mapper;
-    public Stock fbStock;
+    public StockFlatbuffer fbStock;
     FlatBufferBuilder flatBufferBuilder;
     public io.confluent.developer.Stock jrSTock;
 
@@ -37,9 +37,9 @@ public class FlatbufferJacksonBenchmark {
         int exchangeName = flatBufferBuilder.createString("NASDAQ");
         int fullNameName = flatBufferBuilder.createString("Confluent Inc.");
         int type = TxnType.BUY.ordinal();
-        int stock = Stock.createStock(flatBufferBuilder, 100.0, 1000L, symbolName, exchangeName, fullNameName, (byte) type);
+        int stock = StockFlatbuffer.createStockFlatbuffer(flatBufferBuilder, 100.0, 1000L, symbolName, exchangeName, fullNameName, (byte) type);
         flatBufferBuilder.finish(stock);
-        fbStock = Stock.getRootAsStock(flatBufferBuilder.dataBuffer());
+        fbStock = StockFlatbuffer.getRootAsStockFlatbuffer(flatBufferBuilder.dataBuffer());
 
         jrSTock = new io.confluent.developer.Stock(100.0, 1000L, "CFLT", "NASDAQ", "Confluent Inc.", TxnType.BUY);
     }

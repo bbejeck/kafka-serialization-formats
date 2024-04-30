@@ -1,11 +1,14 @@
 package io.confluent.developer.consumer;
 
 import io.confluent.developer.Stock;
+import io.confluent.developer.avro.StockAvro;
+import io.confluent.developer.flatbuffer.StockFlatbuffer;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.serde.FlatBufferDeserializer;
 import io.confluent.developer.serde.JacksonRecordDeserializer;
 import io.confluent.developer.util.Utils;
-import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import org.apache.kafka.clients.consumer.*;
@@ -25,6 +28,7 @@ public class ConsumerRunner {
     private static final String FLATBUFFER = "flatbuffer";
     private static final String RECORD = "record";
     private static final String PROTO = "proto";
+    private static final String AVRO = "avro";
 
     public static void main(String[] args) {
         if (args.length == 0) {
@@ -50,10 +54,16 @@ public class ConsumerRunner {
             case PROTO -> {
                 props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaProtobufDeserializer.class);
                 props.put(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_VALUE_TYPE, StockProto.class);
-                props.put(ConsumerConfig.GROUP_ID_CONFIG, "proto-group2");
+                props.put(ConsumerConfig.GROUP_ID_CONFIG, "proto-group");
                 consumeRecords(numRecords, props, "proto-input");
             }
-
+            case AVRO -> {
+                props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
+                props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG, StockAvro.class);
+                props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
+                props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-group2");
+                consumeRecords(numRecords, props, "avro-input");
+            }
             default -> {
                 System.out.printf("Invalid message type %s%n", messageType);
                 System.exit(1);
@@ -72,7 +82,7 @@ public class ConsumerRunner {
                 for (ConsumerRecord<byte[], Object> consumerRecord : records) {
                     recordCount++;
                     switch (consumerRecord.value()) {
-                        case io.confluent.developer.flatbuffer.Stock fbStock -> {
+                        case StockFlatbuffer fbStock -> {
                             stringBuilder.append(fbStock.symbol()).append(" : ")
                                     .append(fbStock.price()).append(", ")
                                     .append(fbStock.shares());
@@ -88,6 +98,12 @@ public class ConsumerRunner {
                             stringBuilder.append(stockProto.getSymbol()).append(" : ")
                                     .append(stockProto.getPrice()).append(", ")
                                     .append(stockProto.getShares());
+                            maybePrint(stringBuilder, recordCount);
+                        }
+                        case StockAvro stockAvro -> {
+                            stringBuilder.append(stockAvro.getSymbol()).append(" : ")
+                                    .append(stockAvro.getPrice()).append(", ")
+                                    .append(stockAvro.getShares());
                             maybePrint(stringBuilder, recordCount);
                         }
                         

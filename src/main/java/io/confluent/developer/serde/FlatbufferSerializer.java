@@ -1,6 +1,6 @@
 package io.confluent.developer.serde;
 
-import io.confluent.developer.flatbuffer.Stock;
+import io.confluent.developer.flatbuffer.StockFlatbuffer;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.nio.ByteBuffer;
@@ -10,11 +10,11 @@ import java.nio.ByteBuffer;
  * Instead this Serializer instance returns the underlying
  * byte array contained in the ByteBuffer instance.
  */
-public class FlatbufferSerializer implements Serializer<Stock> {
+public class FlatbufferSerializer implements Serializer<StockFlatbuffer> {
 
 
     @Override
-    public byte[] serialize(String s, Stock stock) {
+    public byte[] serialize(String s, StockFlatbuffer stock) {
         if (stock == null) {
             return null;
         }

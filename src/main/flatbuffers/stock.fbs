@@ -5,7 +5,7 @@ file_extension "ext";
 
 enum TxnType : byte {BUY = 0, SELL = 1}
 
-table Stock {
+table StockFlatbuffer {
     price:double;
     shares:long;
     symbol:string;
