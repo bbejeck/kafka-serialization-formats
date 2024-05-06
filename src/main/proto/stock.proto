@@ -15,6 +15,5 @@ message StockProto {
   int64 shares = 2;
   string symbol = 3;
   string exchange = 4;
-  string full_name = 5;
-  TxnType txn = 6;
+  TxnType txn = 5;
 }

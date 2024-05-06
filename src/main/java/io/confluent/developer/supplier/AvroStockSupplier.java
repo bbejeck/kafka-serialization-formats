@@ -22,7 +22,6 @@ public class AvroStockSupplier implements Supplier<StockAvro> {
                 .setShares(faker.number().numberBetween(100, 10_000))
                 .setSymbol(faker.stock().nsdqSymbol())
                 .setExchange(faker.stock().exchanges())
-                .setFullName(faker.company().name())
                 .setTxnType(txn.values()[faker.number().numberBetween(0, 2)]).build();
     }
 }

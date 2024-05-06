@@ -9,6 +9,5 @@ public record Stock(double price,
                     long shares,
                     String symbol,
                     String exchange,
-                    String fullName,
                     TxnType type) {
 }

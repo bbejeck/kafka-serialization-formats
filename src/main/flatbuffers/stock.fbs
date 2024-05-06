@@ -10,6 +10,7 @@ table StockFlatbuffer {
     shares:long;
     symbol:string;
     exchange:string;
-    full_name:string;
     type:TxnType;
 }
+
+root_type StockFlatbuffer;

@@ -22,7 +22,6 @@ public class ProtoStockSupplier implements Supplier<StockProto> {
                 .setShares(faker.number().numberBetween(100, 10_000))
                 .setSymbol(faker.stock().nsdqSymbol())
                 .setExchange(faker.stock().exchanges())
-                .setFullName(faker.company().name())
                 .setTxn(TxnType.values()[faker.number().numberBetween(0, 2)]).build();
     }
 }

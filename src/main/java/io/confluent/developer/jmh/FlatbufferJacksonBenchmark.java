@@ -35,13 +35,12 @@ public class FlatbufferJacksonBenchmark {
         mapper = new ObjectMapper();
         int symbolName = flatBufferBuilder.createString("CFLT");
         int exchangeName = flatBufferBuilder.createString("NASDAQ");
-        int fullNameName = flatBufferBuilder.createString("Confluent Inc.");
         int type = TxnType.BUY.ordinal();
-        int stock = StockFlatbuffer.createStockFlatbuffer(flatBufferBuilder, 100.0, 1000L, symbolName, exchangeName, fullNameName, (byte) type);
+        int stock = StockFlatbuffer.createStockFlatbuffer(flatBufferBuilder, 100.0, 1000L, symbolName, exchangeName, (byte) type);
         flatBufferBuilder.finish(stock);
         fbStock = StockFlatbuffer.getRootAsStockFlatbuffer(flatBufferBuilder.dataBuffer());
 
-        jrSTock = new io.confluent.developer.Stock(100.0, 1000L, "CFLT", "NASDAQ", "Confluent Inc.", TxnType.BUY);
+        jrSTock = new io.confluent.developer.Stock(100.0, 1000L, "CFLT", "NASDAQ", TxnType.BUY);
     }
 
     @Benchmark

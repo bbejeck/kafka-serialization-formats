@@ -9,6 +9,7 @@ plugins {
     id "me.champeau.jmh" version "0.7.2"
     id "com.google.protobuf" version "0.9.4"
     id "com.github.davidmc24.gradle.plugin.avro" version "1.9.1"
+    id "com.github.vontikov.sbe-generator-plugin" version "0.0.8"
 }
 
 group = 'io.confluent.developer'
@@ -29,7 +30,7 @@ java {
 sourceSets {
     main {
         java {
-            srcDirs 'src/main/java', 'generated-flatbuffers/'
+            srcDirs 'src/main/java', 'generated-flatbuffers/', 'generated-sbe'
         }
     }
 }
@@ -38,6 +39,17 @@ protobuf {
     protoc {
         artifact = 'com.google.protobuf:protoc:3.25.3'
     }
+}
+
+sbeGenerator {
+    src {
+        dir = '/src/main/resources/xml'
+        includes = []
+        excludes = []
+    }
+
+    javaCodecsDir = 'build/generated/src/main/java'
+    javaClassesDir = 'build/generated/classes'
 }
 
 compileJava {
@@ -58,6 +70,9 @@ dependencies {
     implementation 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
     implementation 'com.google.protobuf:protobuf-java:3.25.3'
     implementation 'org.apache.avro:avro:1.11.3'
+    implementation 'uk.co.real-logic:sbe-tool:1.31.1'
+    implementation 'uk.co.real-logic:sbe-all:1.31.1'
+    implementation 'org.agrona:agrona:1.21.1'
 
     implementation "io.confluent:kafka-avro-serializer:7.6.0"
     implementation "io.confluent:kafka-protobuf-serializer:7.6.0"

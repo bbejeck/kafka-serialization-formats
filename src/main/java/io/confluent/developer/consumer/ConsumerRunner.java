@@ -1,5 +1,7 @@
 package io.confluent.developer.consumer;
 
+import baseline.MessageHeaderDecoder;
+import baseline.StockTradeDecoder;
 import io.confluent.developer.Stock;
 import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.flatbuffer.StockFlatbuffer;
@@ -11,8 +13,10 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+
 
 import java.time.Duration;
 import java.time.Instant;
@@ -29,12 +33,15 @@ public class ConsumerRunner {
     private static final String RECORD = "record";
     private static final String PROTO = "proto";
     private static final String AVRO = "avro";
+    private static final String SBE = "sbe";
+
 
     public static void main(String[] args) {
         if (args.length == 0) {
             System.out.println("Usage ProducerRunner flatbuffer|record|avro|proto numRecords");
             System.exit(1);
         }
+
         String messageType = args[0];
         Properties props = Utils.getProperties();
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
@@ -61,8 +68,13 @@ public class ConsumerRunner {
                 props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
                 props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG, StockAvro.class);
                 props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
-                props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-group2");
+                props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-group");
                 consumeRecords(numRecords, props, "avro-input");
+            }
+            case SBE -> {
+                props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+                props.put(ConsumerConfig.GROUP_ID_CONFIG, "sbe-group");
+                consumeRecords(numRecords, props, "sbe-input");
             }
             default -> {
                 System.out.printf("Invalid message type %s%n", messageType);
@@ -74,6 +86,9 @@ public class ConsumerRunner {
     private static void consumeRecords(int numRecords, Properties props, String topic) {
         Instant startTime = Instant.now();
         int recordCount = 0;
+        MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
+        UnsafeBuffer unsafeBuffer = new UnsafeBuffer();
+        StockTradeDecoder stockTradeDecoder = new StockTradeDecoder();
         StringBuilder stringBuilder = new StringBuilder();
         try (Consumer<byte[], Object> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Collections.singletonList(topic));
@@ -104,6 +119,14 @@ public class ConsumerRunner {
                             stringBuilder.append(stockAvro.getSymbol()).append(" : ")
                                     .append(stockAvro.getPrice()).append(", ")
                                     .append(stockAvro.getShares());
+                            maybePrint(stringBuilder, recordCount);
+                        }
+                        case byte[] sbeBytes -> {
+                            unsafeBuffer.wrap(sbeBytes);
+                            stockTradeDecoder.wrapAndApplyHeader(unsafeBuffer, 0, messageHeaderDecoder);
+                            stringBuilder.append(stockTradeDecoder.symbol()).append(" : ")
+                                    .append(stockTradeDecoder.price()).append(", ")
+                                    .append(stockTradeDecoder.shares());
                             maybePrint(stringBuilder, recordCount);
                         }
                         

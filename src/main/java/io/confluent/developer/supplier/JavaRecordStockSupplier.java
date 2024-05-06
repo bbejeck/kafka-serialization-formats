@@ -21,7 +21,6 @@ public class JavaRecordStockSupplier implements Supplier<Stock> {
                         faker.number().numberBetween(100, 10_000),
                         faker.stock().nsdqSymbol(),
                         faker.stock().exchanges(),
-                        faker.company().name(),
                         TxnType.values()[faker.number().numberBetween(0, 2)]);
     }
 }

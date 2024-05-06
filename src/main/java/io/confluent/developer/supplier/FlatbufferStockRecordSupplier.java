@@ -29,11 +29,9 @@ public class FlatbufferStockRecordSupplier implements Supplier<StockFlatbuffer> 
         builder.clear();
         int symbol = builder.createString(faker.stock().nsdqSymbol());
         int exchange = builder.createString(faker.stock().exchanges());
-        int fullName = builder.createString(faker.company().name());
         StockFlatbuffer.startStockFlatbuffer(builder);
         StockFlatbuffer.addSymbol(builder, symbol);
         StockFlatbuffer.addExchange(builder,exchange);
-        StockFlatbuffer.addFullName(builder, fullName);
         StockFlatbuffer.addType(builder, (byte) TxnType.values()[faker.number().numberBetween(0,2)].ordinal());
         StockFlatbuffer.addPrice(builder, faker.number().randomDouble(2,1,200));
         StockFlatbuffer.addShares(builder, faker.number().numberBetween(100, 10_000));

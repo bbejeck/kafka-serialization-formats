@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   xmlns:xi="http://www.w3.org/2001/XInclude"
+                   package="baseline"
+                   id="1"
+                   version="0"
+                   semanticVersion="5.2"
+                   description="Example base schema which can be extended."
+                   byteOrder="littleEndian">
+
+    <xi:include href="common-types.xml"/>
+    <types>
+        <type name="Symbol" primitiveType="char" length="4" characterEncoding="ASCII" description="Stock symbol"/>
+        <enum name="TxnType" encodingType="uint8" descritpion="Transaction Type">
+            <validValue name="BUY">0</validValue>
+            <validValue name="SELL">1</validValue>
+        </enum>
+        <enum name="Exchange" encodingType="uint8" descritpion="Market Exchange">
+            <validValue name="NASDAQ">0</validValue>
+            <validValue name="NYSE">1</validValue>
+        </enum>
+    </types>
+    <sbe:message name="StockTrade" id="1" description="Describes a stock trade">
+        <field name="price" id="1" type="float"/>
+        <field name="shares" id="2" type="uint16"/>
+        <field name="symbol" id="3" type="Symbol"/>
+        <field name="exchange" id="4" type="Exchange"/>
+        <field name="txnType" id="5" type="TxnType"/>
+    </sbe:message>
+</sbe:messageSchema>

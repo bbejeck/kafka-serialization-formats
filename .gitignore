@@ -47,3 +47,4 @@ bin/
 confluent.properties
 config.properties
 generated-flatbuffers/
+generated-sbe/

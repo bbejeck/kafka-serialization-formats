@@ -2,15 +2,10 @@ package io.confluent.developer.producer;
 
 import io.confluent.developer.serde.FlatbufferSerializer;
 import io.confluent.developer.serde.JacksonRecordSerializer;
-import io.confluent.developer.supplier.AvroStockSupplier;
-import io.confluent.developer.supplier.FlatbufferStockRecordSupplier;
-import io.confluent.developer.supplier.JavaRecordStockSupplier;
-import io.confluent.developer.supplier.ProtoStockSupplier;
+import io.confluent.developer.supplier.*;
 import io.confluent.developer.util.Utils;
-import io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
-import io.confluent.kafka.serializers.protobuf.AbstractKafkaProtobufSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -33,6 +28,7 @@ public class ProducerRunner {
     private static final String RECORD = "record";
     private static final String PROTO = "proto";
     private static final String AVRO = "avro";
+    private static final String SBE = "sbe";
 
     public static void main(String[] args) {
 
@@ -47,7 +43,7 @@ public class ProducerRunner {
         switch (messageType) {
             case FLATBUFFER -> {
                 props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, FlatbufferSerializer.class);
-                produceRecords(numRecords, "flatbuffer-input", new FlatbufferStockRecordSupplier(), props);
+                produceRecords(numRecords, "flatbuffer-updated-one", new FlatbufferStockRecordSupplier(), props);
             }
             case RECORD -> {
                 props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JacksonRecordSerializer.class);
@@ -63,6 +59,11 @@ public class ProducerRunner {
                 props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, true);
                 produceRecords(numRecords, "avro-input", new AvroStockSupplier(), props);
             }
+            case SBE -> {
+                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+                produceRecords(numRecords, "sbe-input", new SbeRecordSupplier(), props);
+            }
+
 
             default -> System.out.println("Invalid message type: " + messageType);
         }
