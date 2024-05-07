@@ -3,10 +3,8 @@ package io.confluent.developer.serde;
 import baseline.MessageHeaderDecoder;
 import baseline.StockTradeDecoder;
 import baseline.TxnType;
-import com.google.flatbuffers.FlatBufferBuilder;
 import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.avro.txn;
-import io.confluent.developer.flatbuffer.StockFlatbuffer;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.supplier.SbeRecordSupplier;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
@@ -19,7 +17,8 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * User: Bill Bejeck
@@ -28,8 +27,6 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class SerializationTests {
 
-    private FlatBufferBuilder builder = new FlatBufferBuilder();
-    private FlatbufferSerializer flatbufferSerializer = new FlatbufferSerializer();
     private  SbeRecordSupplier sbeRecordSupplier = new SbeRecordSupplier();
     private KafkaProtobufSerializer<StockProto> protobufSerializer = new KafkaProtobufSerializer<>();
     private KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer();
@@ -43,18 +40,15 @@ public class SerializationTests {
     }
     
     @Test
-    void flatbufferSerializationTest() {
-       StockFlatbuffer stockFlatbuffer = getFlatbuffer();
+    void serializedRecordSizesTest() {
        StockProto stockProto = getStockProto();
        StockAvro stockAvro = getStockAvro();
        byte[] protoSerialized = protobufSerializer.serialize("topic", stockProto);
        byte[] serializedAvro = avroSerializer.serialize("topic", stockAvro);
-       byte[] stockflatbufferSerialized = flatbufferSerializer.serialize("topic", stockFlatbuffer);
        byte[] sbeBytes = sbeRecordSupplier.get();
 
       System.out.printf("Proto bytes %d%n", protoSerialized.length);
       System.out.printf("Avro bytes %d%n", serializedAvro.length);
-      System.out.printf("Flatbuffer bytes %d%n", stockflatbufferSerialized.length);
       System.out.printf("SBE bytes %d%n", sbeBytes.length);
     }
 
@@ -90,21 +84,6 @@ public class SerializationTests {
         stockProtoBuilder.setExchange("NASDQ");
         stockProtoBuilder.setTxn(io.confluent.developer.proto.TxnType.BUY);
         return stockProtoBuilder.build();
-    }
-
-    StockFlatbuffer getFlatbuffer() {
-        builder.clear();
-        int symbol = builder.createString("cflt");
-        int exchange = builder.createString("NASDQ");
-        StockFlatbuffer.startStockFlatbuffer(builder);
-        StockFlatbuffer.addPrice(builder, 101.0);
-        StockFlatbuffer.addShares(builder, 70_000);
-        StockFlatbuffer.addSymbol(builder, symbol);
-        StockFlatbuffer.addExchange(builder,exchange);
-        StockFlatbuffer.addType(builder, (byte) TxnType.values()[0].ordinal());
-        int finishedStock = StockFlatbuffer.endStockFlatbuffer(builder);
-        builder.finish(finishedStock);
-        return StockFlatbuffer.getRootAsStockFlatbuffer(builder.dataBuffer());
     }
 
 }

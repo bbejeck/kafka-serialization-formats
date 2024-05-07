@@ -6,10 +6,8 @@ buildscript {
 
 plugins {
     id 'java'
-    id "me.champeau.jmh" version "0.7.2"
     id "com.google.protobuf" version "0.9.4"
     id "com.github.davidmc24.gradle.plugin.avro" version "1.9.1"
-    id "com.github.vontikov.sbe-generator-plugin" version "0.0.8"
 }
 
 group = 'io.confluent.developer'
@@ -30,7 +28,7 @@ java {
 sourceSets {
     main {
         java {
-            srcDirs 'src/main/java', 'generated-flatbuffers/', 'generated-sbe'
+            srcDirs 'src/main/java', 'generated-sbe'
         }
     }
 }
@@ -41,15 +39,14 @@ protobuf {
     }
 }
 
-sbeGenerator {
-    src {
-        dir = '/src/main/resources/xml'
-        includes = []
-        excludes = []
-    }
-
-    javaCodecsDir = 'build/generated/src/main/java'
-    javaClassesDir = 'build/generated/classes'
+tasks.register('sbe', JavaExec) {
+    group = "Execution"
+    description = "Runs the SBE tool to generate code from schemas"
+    systemProperty("sbe.output.dir","generated-sbe")
+    systemProperty("sbe.xinclude.aware", "true")
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = "uk.co.real_logic.sbe.SbeTool"
+    args "src/main/resources/xml/stock-schema.xml"
 }
 
 compileJava {
@@ -62,7 +59,6 @@ processResources {
 
 
 dependencies {
-    implementation 'com.google.flatbuffers:flatbuffers-java:24.3.25'
     implementation 'org.apache.kafka:kafka-clients:3.7.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
     implementation 'net.datafaker:datafaker:2.2.2'
@@ -70,9 +66,8 @@ dependencies {
     implementation 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
     implementation 'com.google.protobuf:protobuf-java:3.25.3'
     implementation 'org.apache.avro:avro:1.11.3'
-    implementation 'uk.co.real-logic:sbe-tool:1.31.1'
     implementation 'uk.co.real-logic:sbe-all:1.31.1'
-    implementation 'org.agrona:agrona:1.21.1'
+    implementation 'com.esotericsoftware:kryo:5.6.0'
 
     implementation "io.confluent:kafka-avro-serializer:7.6.0"
     implementation "io.confluent:kafka-protobuf-serializer:7.6.0"

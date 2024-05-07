@@ -1,8 +1,10 @@
 package io.confluent.developer.producer;
 
-import io.confluent.developer.serde.FlatbufferSerializer;
 import io.confluent.developer.serde.JacksonRecordSerializer;
-import io.confluent.developer.supplier.*;
+import io.confluent.developer.supplier.AvroStockSupplier;
+import io.confluent.developer.supplier.JavaRecordStockSupplier;
+import io.confluent.developer.supplier.ProtoStockSupplier;
+import io.confluent.developer.supplier.SbeRecordSupplier;
 import io.confluent.developer.util.Utils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
@@ -24,7 +26,7 @@ import java.util.function.Supplier;
  * Time: 4:21 PM
  */
 public class ProducerRunner {
-    private static final String FLATBUFFER = "flatbuffer";
+
     private static final String RECORD = "record";
     private static final String PROTO = "proto";
     private static final String AVRO = "avro";
@@ -41,10 +43,6 @@ public class ProducerRunner {
         Properties props = Utils.getProperties();
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         switch (messageType) {
-            case FLATBUFFER -> {
-                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, FlatbufferSerializer.class);
-                produceRecords(numRecords, "flatbuffer-updated-one", new FlatbufferStockRecordSupplier(), props);
-            }
             case RECORD -> {
                 props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JacksonRecordSerializer.class);
                 produceRecords(numRecords, "record-input", new JavaRecordStockSupplier(), props);

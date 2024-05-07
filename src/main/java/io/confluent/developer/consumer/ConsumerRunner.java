@@ -4,9 +4,7 @@ import baseline.MessageHeaderDecoder;
 import baseline.StockTradeDecoder;
 import io.confluent.developer.Stock;
 import io.confluent.developer.avro.StockAvro;
-import io.confluent.developer.flatbuffer.StockFlatbuffer;
 import io.confluent.developer.proto.StockProto;
-import io.confluent.developer.serde.FlatBufferDeserializer;
 import io.confluent.developer.serde.JacksonRecordDeserializer;
 import io.confluent.developer.util.Utils;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -16,7 +14,6 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-
 
 import java.time.Duration;
 import java.time.Instant;
@@ -48,11 +45,7 @@ public class ConsumerRunner {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         int numRecords = Integer.parseInt(args[1]);
         switch (messageType) {
-            case FLATBUFFER -> {
-                props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, FlatBufferDeserializer.class);
-                props.put(ConsumerConfig.GROUP_ID_CONFIG, "flatbuffer-group");
-                consumeRecords(numRecords, props, "flatbuffer-input");
-            }
+
             case RECORD -> {
                 props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JacksonRecordDeserializer.class);
                 props.put(ConsumerConfig.GROUP_ID_CONFIG, "record-group");
@@ -97,12 +90,7 @@ public class ConsumerRunner {
                 for (ConsumerRecord<byte[], Object> consumerRecord : records) {
                     recordCount++;
                     switch (consumerRecord.value()) {
-                        case StockFlatbuffer fbStock -> {
-                            stringBuilder.append(fbStock.symbol()).append(" : ")
-                                    .append(fbStock.price()).append(", ")
-                                    .append(fbStock.shares());
-                            maybePrint(stringBuilder, recordCount);
-                        }
+                       
                         case Stock jrStock -> {
                             stringBuilder.append(jrStock.symbol()).append(" : ")
                                     .append(jrStock.price()).append(", ")

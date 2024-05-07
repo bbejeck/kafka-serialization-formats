@@ -1,7 +1,7 @@
 package io.confluent.developer.supplier;
 
-import io.confluent.developer.proto.TxnType;
 import io.confluent.developer.proto.StockProto;
+import io.confluent.developer.proto.TxnType;
 import net.datafaker.Faker;
 
 import java.util.function.Supplier;

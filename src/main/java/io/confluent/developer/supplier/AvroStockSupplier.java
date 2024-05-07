@@ -1,7 +1,6 @@
 package io.confluent.developer.supplier;
 
 import io.confluent.developer.avro.StockAvro;
-
 import io.confluent.developer.avro.txn;
 import net.datafaker.Faker;
 
