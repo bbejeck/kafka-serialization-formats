@@ -4,9 +4,9 @@
   "name": "StockAvro",
   "fields": [
     {"name": "price", "type": "double"},
-    {"name": "shares", "type": "long"},
+    {"name": "shares", "type": "int"},
     {"name": "symbol", "type": "string"},
-    {"name": "exchange", "type": "string"},
-    {"name": "TxnType", "type": {"type": "enum", "name": "txn","symbols": ["BUY", "SELL"]} }
+    {"name": "exchange", "type": "Exchange"},
+    {"name": "type", "type": "TxnType"}
   ]
 }

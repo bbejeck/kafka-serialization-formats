@@ -40,13 +40,13 @@ protobuf {
 }
 
 tasks.register('sbe', JavaExec) {
-    group = "Execution"
-    description = "Runs the SBE tool to generate code from schemas"
     systemProperty("sbe.output.dir","generated-sbe")
     systemProperty("sbe.xinclude.aware", "true")
+    group = "Execution"
+    description = "Runs the SBE tool to generate code from schemas"
     classpath = sourceSets.main.runtimeClasspath
     mainClass = "uk.co.real_logic.sbe.SbeTool"
-    args "src/main/resources/xml/stock-schema.xml"
+    args "src/main/resources/sbe-schema/stock-schema.xml"
 }
 
 compileJava {

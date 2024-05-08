@@ -10,10 +10,15 @@ enum TxnType {
     SELL = 1;
 }
 
+enum Exchange {
+  NYSE = 0;
+  NASDAQ = 1;
+}
+
 message StockProto {
   double price = 1;
-  int64 shares = 2;
+  int32 shares = 2;
   string symbol = 3;
-  string exchange = 4;
+  Exchange exchange = 4;
   TxnType txn = 5;
 }

@@ -1,5 +1,6 @@
 package io.confluent.developer.supplier;
 
+import io.confluent.developer.proto.Exchange;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.proto.TxnType;
 import net.datafaker.Faker;
@@ -21,7 +22,7 @@ public class ProtoStockSupplier implements Supplier<StockProto> {
         return builder.setPrice(faker.number().randomDouble(2, 1, 200))
                 .setShares(faker.number().numberBetween(100, 10_000))
                 .setSymbol(faker.stock().nsdqSymbol())
-                .setExchange(faker.stock().exchanges())
+                .setExchange(Exchange.values()[faker.number().numberBetween(1, 2)])
                 .setTxn(TxnType.values()[faker.number().numberBetween(0, 2)]).build();
     }
 }

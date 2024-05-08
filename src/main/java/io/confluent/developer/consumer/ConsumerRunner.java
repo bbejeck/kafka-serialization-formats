@@ -1,17 +1,16 @@
 package io.confluent.developer.consumer;
 
-import baseline.MessageHeaderDecoder;
 import baseline.StockTradeDecoder;
 import io.confluent.developer.Stock;
 import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.serde.JacksonRecordDeserializer;
+import io.confluent.developer.serde.SbeDeserializer;
 import io.confluent.developer.util.Utils;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
-import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
@@ -26,7 +25,6 @@ import java.util.Properties;
  * Time: 12:42 PM
  */
 public class ConsumerRunner {
-    private static final String FLATBUFFER = "flatbuffer";
     private static final String RECORD = "record";
     private static final String PROTO = "proto";
     private static final String AVRO = "avro";
@@ -35,17 +33,15 @@ public class ConsumerRunner {
 
     public static void main(String[] args) {
         if (args.length == 0) {
-            System.out.println("Usage ProducerRunner flatbuffer|record|avro|proto numRecords");
+            System.out.println("Usage ProducerRunner record|avro|proto|sbe numRecords");
             System.exit(1);
         }
-
-        String messageType = args[0];
+        String messageType = args[0].toLowerCase();
         Properties props = Utils.getProperties();
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         int numRecords = Integer.parseInt(args[1]);
         switch (messageType) {
-
             case RECORD -> {
                 props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JacksonRecordDeserializer.class);
                 props.put(ConsumerConfig.GROUP_ID_CONFIG, "record-group");
@@ -61,12 +57,12 @@ public class ConsumerRunner {
                 props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
                 props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG, StockAvro.class);
                 props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
-                props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-group");
+                props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-group3");
                 consumeRecords(numRecords, props, "avro-input");
             }
             case SBE -> {
-                props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-                props.put(ConsumerConfig.GROUP_ID_CONFIG, "sbe-group");
+                props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, SbeDeserializer.class);
+                props.put(ConsumerConfig.GROUP_ID_CONFIG, "sbe-group4");
                 consumeRecords(numRecords, props, "sbe-input");
             }
             default -> {
@@ -79,9 +75,6 @@ public class ConsumerRunner {
     private static void consumeRecords(int numRecords, Properties props, String topic) {
         Instant startTime = Instant.now();
         int recordCount = 0;
-        MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
-        UnsafeBuffer unsafeBuffer = new UnsafeBuffer();
-        StockTradeDecoder stockTradeDecoder = new StockTradeDecoder();
         StringBuilder stringBuilder = new StringBuilder();
         try (Consumer<byte[], Object> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Collections.singletonList(topic));
@@ -92,28 +85,26 @@ public class ConsumerRunner {
                     switch (consumerRecord.value()) {
                        
                         case Stock jrStock -> {
-                            stringBuilder.append(jrStock.symbol()).append(" : ")
-                                    .append(jrStock.price()).append(", ")
+                            stringBuilder.append(jrStock.symbol()).append(":@price ")
+                                    .append(jrStock.price()).append(" num_shares= ")
                                     .append(jrStock.shares());
                            maybePrint(stringBuilder, recordCount);
                         }
                         case StockProto stockProto -> {
-                            stringBuilder.append(stockProto.getSymbol()).append(" : ")
-                                    .append(stockProto.getPrice()).append(", ")
+                            stringBuilder.append(stockProto.getSymbol()).append(":@price ")
+                                    .append(stockProto.getPrice()).append(" num_shares= ")
                                     .append(stockProto.getShares());
                             maybePrint(stringBuilder, recordCount);
                         }
                         case StockAvro stockAvro -> {
-                            stringBuilder.append(stockAvro.getSymbol()).append(" : ")
-                                    .append(stockAvro.getPrice()).append(", ")
+                            stringBuilder.append(stockAvro.getSymbol()).append(":@price ")
+                                    .append(stockAvro.getPrice()).append(" num_shares= ")
                                     .append(stockAvro.getShares());
                             maybePrint(stringBuilder, recordCount);
                         }
-                        case byte[] sbeBytes -> {
-                            unsafeBuffer.wrap(sbeBytes);
-                            stockTradeDecoder.wrapAndApplyHeader(unsafeBuffer, 0, messageHeaderDecoder);
-                            stringBuilder.append(stockTradeDecoder.symbol()).append(" : ")
-                                    .append(stockTradeDecoder.price()).append(", ")
+                        case StockTradeDecoder stockTradeDecoder -> {
+                            stringBuilder.append(stockTradeDecoder.symbol()).append("@price ")
+                                    .append(stockTradeDecoder.price()).append(" num_shares= ")
                                     .append(stockTradeDecoder.shares());
                             maybePrint(stringBuilder, recordCount);
                         }

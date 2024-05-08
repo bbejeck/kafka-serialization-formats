@@ -1,6 +1,7 @@
 package io.confluent.developer.producer;
 
 import io.confluent.developer.serde.JacksonRecordSerializer;
+import io.confluent.developer.serde.SbeSerializer;
 import io.confluent.developer.supplier.AvroStockSupplier;
 import io.confluent.developer.supplier.JavaRecordStockSupplier;
 import io.confluent.developer.supplier.ProtoStockSupplier;
@@ -58,11 +59,9 @@ public class ProducerRunner {
                 produceRecords(numRecords, "avro-input", new AvroStockSupplier(), props);
             }
             case SBE -> {
-                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, SbeSerializer.class);
                 produceRecords(numRecords, "sbe-input", new SbeRecordSupplier(), props);
             }
-
-
             default -> System.out.println("Invalid message type: " + messageType);
         }
     }
