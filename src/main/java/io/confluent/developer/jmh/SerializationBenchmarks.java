@@ -1,5 +1,9 @@
 package io.confluent.developer.jmh;
 
+import baseline.MessageHeaderDecoder;
+import baseline.MessageHeaderEncoder;
+import baseline.StockTradeDecoder;
+import baseline.StockTradeEncoder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.confluent.developer.Stock;
@@ -8,13 +12,13 @@ import io.confluent.developer.proto.Exchange;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
-import org.openjdk.jmh.runner.Runner;
-import org.openjdk.jmh.runner.RunnerException;
-import org.openjdk.jmh.runner.options.Options;
-import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -27,52 +31,77 @@ import java.util.concurrent.TimeUnit;
 
 @Fork(value = 1)
 @Warmup(iterations = 5)
-@Measurement(iterations = 15)
-@BenchmarkMode(Mode.Throughput)
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@Measurement(iterations = 10)
+@BenchmarkMode(Mode.AverageTime)
+@OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
 public class SerializationBenchmarks {
 
     @State(Scope.Benchmark)
-   public static class JacksonState {
-       public ObjectMapper mapper;
-       public io.confluent.developer.Stock jrSTock;
-
-        public JacksonState() {
-        }
+    public static class JacksonState {
+        public ObjectMapper mapper;
+        public io.confluent.developer.Stock jrSTock;
+        byte[] jacksonBytes;
 
         @Setup(Level.Trial)
-       public void setup() {
-           mapper = new ObjectMapper();
-           jrSTock = new Stock(100.00, 10_000, "CFLT", "NASDAQ", TxnType.BUY);
+        public void setup() throws JsonProcessingException {
+            mapper = new ObjectMapper();
+            jrSTock = new Stock(100.00, 10_000, "CFLT", "NASDAQ", TxnType.BUY);
+            jacksonBytes = mapper.writeValueAsBytes(jrSTock);
         }
-   }
+    }
 
-   @State(Scope.Benchmark)
-   public static class ProtoState {
-       KafkaProtobufSerializer<StockProto> protobufSerializer = new KafkaProtobufSerializer<>();
-       KafkaProtobufDeserializer<StockProto> protobufDeserializer = new KafkaProtobufDeserializer<>();
-       byte[] serializedStock;
-       StockProto stockProto;
+    @State(Scope.Benchmark)
+    public static class ProtoState {
+        KafkaProtobufSerializer<StockProto> protobufSerializer = new KafkaProtobufSerializer<>();
+        KafkaProtobufDeserializer<StockProto> protobufDeserializer = new KafkaProtobufDeserializer<>();
+        byte[] serializedStock;
+        StockProto stockProto;
 
-       public ProtoState() {
-       }
+        @Setup(Level.Trial)
+        public void setup() {
+            StockProto.Builder stockBuilder = StockProto.newBuilder();
+            stockBuilder.setSymbol("CFLT")
+                    .setPrice(100.00)
+                    .setShares(10_000)
+                    .setExchange(Exchange.NASDAQ)
+                    .setTxn(io.confluent.developer.proto.TxnType.BUY);
+            Map<String, Object> config = new HashMap<>();
+            config.put("schema.registry.url", "mock://localhost:8081");
+            protobufSerializer.configure(config, false);
+            protobufDeserializer.configure(config, false);
+            stockProto = stockBuilder.build();
+            serializedStock = protobufSerializer.serialize("dummy", stockProto);
+        }
+    }
 
-       @Setup(Level.Trial)
-       public void setup() {
-           StockProto.Builder stockBuilder = StockProto.newBuilder();
-           stockBuilder.setSymbol("CFLT")
-                   .setPrice(100.00)
-                   .setShares(10_000)
-                   .setExchange(Exchange.NASDAQ)
-                   .setTxn(io.confluent.developer.proto.TxnType.BUY);
-           Map<String,Object> config = new HashMap<>();
-           config.put("schema.registry.url", "mock://localhost:8081");
-           protobufSerializer.configure(config, false);
-           stockProto = stockBuilder.build();
-           serializedStock = protobufSerializer.serialize("dummy", stockProto);
-       }
-   }
+    @State(Scope.Benchmark)
+    public static class SbeState {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        UnsafeBuffer unsafeBuffer = new UnsafeBuffer(byteBuffer);
+        MessageHeaderEncoder messageHeaderEncoder = new MessageHeaderEncoder();
+        StockTradeEncoder stockTradeEncoder = new StockTradeEncoder();
+        ByteBuffer decodeBuffer = ByteBuffer.allocate(1024);
+        UnsafeBuffer decodeUnsafeBuffer = new UnsafeBuffer(decodeBuffer);
+        MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
+        StockTradeDecoder stockTradeDecoder = new StockTradeDecoder();
+        byte[] bytes = new byte[26];
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            stockTradeEncoder.wrapAndApplyHeader(unsafeBuffer, 0, messageHeaderEncoder)
+                    .price(100.00f)
+                    .shares(10_000)
+                    .symbol("CFLT")
+                    .exchange(baseline.Exchange.NASDAQ)
+                    .txnType(baseline.TxnType.BUY);
+
+            bytes = Arrays.copyOfRange(
+                    byteBuffer.array(),
+                    0,
+                    stockTradeEncoder.limit());
+        }
+    }
 
     @Benchmark
     public void measureJacksonToByteArray(JacksonState state, Blackhole bh) throws JsonProcessingException {
@@ -80,24 +109,46 @@ public class SerializationBenchmarks {
     }
 
     @Benchmark
-    public void measureProtobufToByteArray(ProtoState state, Blackhole bh) {
+    public void measureBytesToObjectJacksonMapper(JacksonState state, Blackhole bh) throws IOException {
+        Stock stock = state.mapper.readValue(state.jacksonBytes, Stock.class);
+        bh.consume(stock);
+    }
+
+    @Benchmark
+    public void measureKafkaProtobufSerializerToByteArray(ProtoState state, Blackhole bh) {
         byte[] protoBytes = state.protobufSerializer.serialize("topic", state.stockProto);
         bh.consume(protoBytes);
     }
 
-    public static void main(String[] args) throws RunnerException {
-            Options opt = new OptionsBuilder()
-                    .include(SerializationBenchmarks.class.getName())
-                    .forks(1)
-                    .warmupIterations(5)
-                    .measurementIterations(15)
-                    .mode(Mode.Throughput)
-                    .timeUnit(TimeUnit.MICROSECONDS)
-                    .build();
-
-            new Runner(opt).run();
+    @Benchmark
+    public void measureKafkaProtobufDeserializerToByteArray(ProtoState state, Blackhole bh) {
+        StockProto stockProto = state.protobufDeserializer.deserialize("topic", state.serializedStock);
+        bh.consume(stockProto);
     }
 
+    @Benchmark
+    public void measureRawProtobufToByteArray(ProtoState state, Blackhole bh)  {
+        byte[] protoBytes = state.stockProto.toByteArray();
+        bh.consume(protoBytes);
+    }
 
-    
+    @Benchmark
+    public void measureSbeSerialization(SbeState state, Blackhole bh) {
+        ByteBuffer byteBuffer = state.stockTradeEncoder.buffer().byteBuffer();
+        byte[] array = Arrays.copyOfRange(
+                byteBuffer.array(),
+                0,
+                state.stockTradeEncoder.limit()
+        );
+        bh.consume(array);
+    }
+
+    @Benchmark
+    public void measureSbeDeserializer(SbeState state, Blackhole bh) {
+        state.decodeBuffer.put(state.bytes);
+        state.decodeUnsafeBuffer.wrap(state.decodeBuffer);
+        state.stockTradeDecoder.wrapAndApplyHeader(state.decodeUnsafeBuffer, 0, state.messageHeaderDecoder);
+        bh.consume(state.stockTradeDecoder);
+    }
+
 }

@@ -21,8 +21,8 @@
         </enum>
     </types>
     <sbe:message name="StockTrade" id="1" description="Describes a stock trade">
-        <field name="price" id="1" type="float"/>
-        <field name="shares" id="2" type="uint16"/>
+        <field name="price" id="1" type="double"/>
+        <field name="shares" id="2" type="uint32"/>
         <field name="symbol" id="3" type="Symbol"/>
         <field name="exchange" id="4" type="Exchange"/>
         <field name="txnType" id="5" type="TxnType"/>

@@ -48,7 +48,7 @@ class SerializationTests {
 
        assertEquals(27, protoSerialized.length);
        assertEquals(23, serializedAvro.length);
-       assertEquals(20, sbeBytes.length);
+       assertEquals(26, sbeBytes.length);
     }
 
     @Test
