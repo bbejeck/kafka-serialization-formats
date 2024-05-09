@@ -8,6 +8,7 @@ plugins {
     id 'java'
     id "com.google.protobuf" version "0.9.4"
     id "com.github.davidmc24.gradle.plugin.avro" version "1.9.1"
+    id 'com.github.johnrengelman.shadow'  version "8.1.1"
 }
 
 group = 'io.confluent.developer'
@@ -31,6 +32,17 @@ sourceSets {
             srcDirs 'src/main/java', 'generated-sbe'
         }
     }
+}
+
+jar {
+    manifest {
+        attributes "Main-Class": "org.openjdk.jmh.Main"
+    }
+}
+
+shadowJar {
+    archiveBaseName = "serialization-benchmarks"
+    archiveClassifier = ''
 }
 
 protobuf {
@@ -64,10 +76,10 @@ dependencies {
     implementation 'net.datafaker:datafaker:2.2.2'
     implementation 'org.openjdk.jmh:jmh-core:1.37'
     implementation 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
+    annotationProcessor('org.openjdk.jmh:jmh-generator-annprocess:1.37')
     implementation 'com.google.protobuf:protobuf-java:3.25.3'
     implementation 'org.apache.avro:avro:1.11.3'
     implementation 'uk.co.real-logic:sbe-all:1.31.1'
-    implementation 'com.esotericsoftware:kryo:5.6.0'
 
     implementation "io.confluent:kafka-avro-serializer:7.6.0"
     implementation "io.confluent:kafka-protobuf-serializer:7.6.0"
@@ -81,8 +93,6 @@ dependencies {
 
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
-    testImplementation 'org.openjdk.jmh:jmh-core:1.37'
-    testImplementation 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
 }
 
 
