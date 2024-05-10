@@ -11,6 +11,7 @@ import io.confluent.developer.TxnType;
 import io.confluent.developer.proto.Exchange;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.openjdk.jmh.annotations.*;
@@ -69,6 +70,7 @@ public class SerializationBenchmarks {
             Map<String, Object> config = new HashMap<>();
             config.put("schema.registry.url", "mock://localhost:8081");
             protobufSerializer.configure(config, false);
+            config.put(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_VALUE_TYPE, StockProto.class);
             protobufDeserializer.configure(config, false);
             stockProto = stockBuilder.build();
             serializedStock = protobufSerializer.serialize("dummy", stockProto);
@@ -105,30 +107,30 @@ public class SerializationBenchmarks {
     }
 
     @Benchmark
-    public void measureJacksonToByteArray(JacksonState state, Blackhole bh) throws JsonProcessingException {
+    public void measureJacksonSerialization(JacksonState state, Blackhole bh) throws JsonProcessingException {
         bh.consume(state.mapper.writeValueAsBytes(state.jrSTock));
     }
 
     @Benchmark
-    public void measureBytesToObjectJacksonMapper(JacksonState state, Blackhole bh) throws IOException {
+    public void measureJacksonDeserialization(JacksonState state, Blackhole bh) throws IOException {
         Stock stock = state.mapper.readValue(state.jacksonBytes, Stock.class);
         bh.consume(stock);
     }
 
     @Benchmark
-    public void measureKafkaProtobufSerializerToByteArray(ProtoState state, Blackhole bh) {
+    public void measureKafkaProtobufSerialization(ProtoState state, Blackhole bh) {
         byte[] protoBytes = state.protobufSerializer.serialize("topic", state.stockProto);
         bh.consume(protoBytes);
     }
 
     @Benchmark
-    public void measureKafkaProtobufDeserializerToByteArray(ProtoState state, Blackhole bh) {
+    public void measureKafkaProtobufDeserialization(ProtoState state, Blackhole bh) {
         StockProto stockProto = state.protobufDeserializer.deserialize("topic", state.serializedStock);
         bh.consume(stockProto);
     }
 
     @Benchmark
-    public void measureRawProtobufToByteArray(ProtoState state, Blackhole bh)  {
+    public void measureRawProtobufSerializationToByteArray(ProtoState state, Blackhole bh)  {
         byte[] protoBytes = state.stockProto.toByteArray();
         bh.consume(protoBytes);
     }
@@ -145,7 +147,7 @@ public class SerializationBenchmarks {
     }
 
     @Benchmark
-    public void measureSbeDeserializer(SbeState state, Blackhole bh) {
+    public void measureSbeDeserialization(SbeState state, Blackhole bh) {
         state.decodeBuffer = ByteBuffer.wrap(state.bytes);
         state.decodeUnsafeBuffer.wrap(state.decodeBuffer);
         state.stockTradeDecoder.wrapAndApplyHeader(state.decodeUnsafeBuffer, 0, state.messageHeaderDecoder);
