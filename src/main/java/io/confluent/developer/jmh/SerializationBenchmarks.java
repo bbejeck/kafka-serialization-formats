@@ -81,8 +81,8 @@ public class SerializationBenchmarks {
         UnsafeBuffer unsafeBuffer = new UnsafeBuffer(byteBuffer);
         MessageHeaderEncoder messageHeaderEncoder = new MessageHeaderEncoder();
         StockTradeEncoder stockTradeEncoder = new StockTradeEncoder();
-        ByteBuffer decodeBuffer = ByteBuffer.allocate(1024);
-        UnsafeBuffer decodeUnsafeBuffer = new UnsafeBuffer(decodeBuffer);
+        ByteBuffer decodeBuffer;
+        UnsafeBuffer decodeUnsafeBuffer = new UnsafeBuffer();
         MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
         StockTradeDecoder stockTradeDecoder = new StockTradeDecoder();
         byte[] bytes = new byte[26];
@@ -100,7 +100,7 @@ public class SerializationBenchmarks {
                     byteBuffer.array(),
                     0,
                     stockTradeEncoder.limit());
-            decodeBuffer.put(bytes);
+
         }
     }
 
@@ -146,6 +146,7 @@ public class SerializationBenchmarks {
 
     @Benchmark
     public void measureSbeDeserializer(SbeState state, Blackhole bh) {
+        state.decodeBuffer = ByteBuffer.wrap(state.bytes);
         state.decodeUnsafeBuffer.wrap(state.decodeBuffer);
         state.stockTradeDecoder.wrapAndApplyHeader(state.decodeUnsafeBuffer, 0, state.messageHeaderDecoder);
         bh.consume(state.stockTradeDecoder);
