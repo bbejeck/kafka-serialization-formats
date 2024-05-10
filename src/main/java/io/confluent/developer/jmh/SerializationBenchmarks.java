@@ -100,6 +100,7 @@ public class SerializationBenchmarks {
                     byteBuffer.array(),
                     0,
                     stockTradeEncoder.limit());
+            decodeBuffer.put(bytes);
         }
     }
 
@@ -145,7 +146,6 @@ public class SerializationBenchmarks {
 
     @Benchmark
     public void measureSbeDeserializer(SbeState state, Blackhole bh) {
-        state.decodeBuffer.put(state.bytes);
         state.decodeUnsafeBuffer.wrap(state.decodeBuffer);
         state.stockTradeDecoder.wrapAndApplyHeader(state.decodeUnsafeBuffer, 0, state.messageHeaderDecoder);
         bh.consume(state.stockTradeDecoder);
