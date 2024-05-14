@@ -14,12 +14,15 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.apache.kafka.common.serialization.ByteBufferDeserializer;
+import org.apache.kafka.common.serialization.ByteBufferSerializer;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -77,31 +80,29 @@ public class SerializationBenchmarks {
         }
     }
 
+
     @State(Scope.Benchmark)
     public static class SbeState {
-        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
-        UnsafeBuffer unsafeBuffer = new UnsafeBuffer(byteBuffer);
         MessageHeaderEncoder messageHeaderEncoder = new MessageHeaderEncoder();
         StockTradeEncoder stockTradeEncoder = new StockTradeEncoder();
-        ByteBuffer decodeBuffer;
-        UnsafeBuffer decodeUnsafeBuffer = new UnsafeBuffer();
         MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
         StockTradeDecoder stockTradeDecoder = new StockTradeDecoder();
-        byte[] bytes = new byte[26];
+        byte[] bytes;
+        Serializer<ByteBuffer> byteBufferSerializer = new ByteBufferSerializer();
+        Deserializer<ByteBuffer> byteBufferDeserializer = new ByteBufferDeserializer();
 
         @Setup(Level.Trial)
         public void setUp() {
-            stockTradeEncoder.wrapAndApplyHeader(unsafeBuffer, 0, messageHeaderEncoder)
-                    .price(100.00f)
+            ByteBuffer localDirectByteBuffer = ByteBuffer.allocateDirect(26);
+            UnsafeBuffer localDirectUnsafeBuffer = new UnsafeBuffer(localDirectByteBuffer);
+            stockTradeEncoder.wrapAndApplyHeader(localDirectUnsafeBuffer, 0, messageHeaderEncoder)
+                    .price(100.00)
                     .shares(10_000)
                     .symbol("CFLT")
                     .exchange(baseline.Exchange.NASDAQ)
                     .txnType(baseline.TxnType.BUY);
 
-            bytes = Arrays.copyOfRange(
-                    byteBuffer.array(),
-                    0,
-                    stockTradeEncoder.limit());
+            bytes = byteBufferSerializer.serialize("topic", stockTradeEncoder.buffer().byteBuffer());
 
         }
     }
@@ -136,21 +137,19 @@ public class SerializationBenchmarks {
     }
 
     @Benchmark
-    public void measureSbeSerialization(SbeState state, Blackhole bh) {
-        ByteBuffer byteBuffer = state.stockTradeEncoder.buffer().byteBuffer();
-        byte[] array = Arrays.copyOfRange(
-                byteBuffer.array(),
-                0,
-                state.stockTradeEncoder.limit()
-        );
-        bh.consume(array);
+    public void measureSbeSerializationDirectByteBuffer(SbeState state, Blackhole bh) {
+        StockTradeEncoder stockTradeEncoder = state.stockTradeEncoder;
+        byte[] bytes = state.byteBufferSerializer.serialize("topic", stockTradeEncoder.buffer().byteBuffer());
+        bh.consume(bytes);
     }
 
     @Benchmark
-    public void measureSbeDeserialization(SbeState state, Blackhole bh) {
-        state.decodeBuffer = ByteBuffer.wrap(state.bytes);
-        state.decodeUnsafeBuffer.wrap(state.decodeBuffer);
-        state.stockTradeDecoder.wrapAndApplyHeader(state.decodeUnsafeBuffer, 0, state.messageHeaderDecoder);
+    public void measureSbeDeserializationDirectByteBuffer(SbeState state, Blackhole bh) {
+        StockTradeDecoder stockTradeDecoder = state.stockTradeDecoder;
+        byte[] bytes = state.bytes;
+        ByteBuffer deserializedByteBuffer =  state.byteBufferDeserializer.deserialize("topic", bytes);
+        UnsafeBuffer unsafeBuffer = new UnsafeBuffer(deserializedByteBuffer);
+        stockTradeDecoder.wrapAndApplyHeader(unsafeBuffer, 0, state.messageHeaderDecoder);
         bh.consume(state.stockTradeDecoder);
     }
 
