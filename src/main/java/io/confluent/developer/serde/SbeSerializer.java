@@ -16,13 +16,17 @@ public class SbeSerializer implements Serializer<StockTradeEncoder> {
     @Override
     public byte[] serialize(String s, StockTradeEncoder stockTradeEncoder) {
         ByteBuffer byteBuffer = stockTradeEncoder.buffer().byteBuffer();
-        byte[] array = null;
+        byteBuffer.rewind();
+        byte[] array;
         if(byteBuffer.hasArray()) {
             array  = Arrays.copyOfRange(
                     byteBuffer.array(),
                    0,
                     stockTradeEncoder.limit()
             );
+        } else {
+            array = new byte[stockTradeEncoder.limit()];
+            byteBuffer.get(array, 0, stockTradeEncoder.limit());
         }
         return array;
     }

@@ -26,8 +26,10 @@ class SerializationTests {
     private final SbeRecordSupplier sbeRecordSupplier = new SbeRecordSupplier();
     private final KafkaProtobufSerializer<StockProto> protobufSerializer = new KafkaProtobufSerializer<>();
     private final KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer();
-    private final SbeDeserializer sbeDeserializer = new SbeDeserializer();
+    private final SbeDeserializer sbeNonDirectDeserializer = new SbeDeserializer();
     private final SbeSerializer sbeSerializer = new SbeSerializer();
+    private final double price = 99.99;
+    private final int shares = 3_000;
 
     @BeforeEach
     void setUp() {
@@ -39,8 +41,8 @@ class SerializationTests {
     
     @Test
     void serializedRecordSizesTest() {
-       StockProto stockProto = getStockProto();
-       StockAvro stockAvro = getStockAvro();
+       StockProto stockProto = stockProto();
+       StockAvro stockAvro = stockAvro();
        StockTradeEncoder stockTradeEncoder = sbeRecordSupplier.get();
        byte[] protoSerialized = protobufSerializer.serialize("topic", stockProto);
        byte[] serializedAvro = avroSerializer.serialize("topic", stockAvro);
@@ -52,13 +54,54 @@ class SerializationTests {
     }
 
     @Test
-    void sbeEncodeDecodeTest() {
+    void sbeNonDirectEncodeDecodeTest() {
         ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        StockTradeEncoder stockTradeEncoder = stockTradeEncoder(price, shares, byteBuffer);
+        byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
+        assertEquals(26,sbeBytes.length);
+
+        StockTradeDecoder stockTradeDecoder = sbeNonDirectDeserializer.deserialize("topic", sbeBytes);
+        assertEquals(price, stockTradeDecoder.price());
+        assertEquals(shares, stockTradeDecoder.shares());
+        assertEquals("CFLT", stockTradeDecoder.symbol());
+        assertEquals(Exchange.NASDAQ, stockTradeDecoder.exchange());
+        assertEquals(TxnType.BUY, stockTradeDecoder.txnType());
+    }
+
+    @Test
+    void sbeNonDirectEncodeDecodeMaxValuesTest() {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        StockTradeEncoder stockTradeEncoder = stockTradeEncoder(Double.MAX_VALUE, Integer.MAX_VALUE, byteBuffer);
+        byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
+        assertEquals(26,sbeBytes.length);
+
+        StockTradeDecoder stockTradeDecoder = sbeNonDirectDeserializer.deserialize("topic", sbeBytes);
+        assertEquals(Double.MAX_VALUE, stockTradeDecoder.price());
+        assertEquals(Integer.MAX_VALUE, stockTradeDecoder.shares());
+        assertEquals("CFLT", stockTradeDecoder.symbol());
+        assertEquals(Exchange.NASDAQ, stockTradeDecoder.exchange());
+        assertEquals(TxnType.BUY, stockTradeDecoder.txnType());
+    }
+
+
+    @Test
+    void sbeDirectEncodeDecodeTest() {
+        ByteBuffer directBuffer = ByteBuffer.allocateDirect(1024);
+        StockTradeEncoder stockTradeEncoder = stockTradeEncoder(price, shares, directBuffer);
+        byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
+        assertEquals(26, sbeBytes.length);
+        StockTradeDecoder stockTradeDecoder = sbeNonDirectDeserializer.deserialize("topic", sbeBytes);
+        assertEquals(price, stockTradeDecoder.price());
+        assertEquals(shares, stockTradeDecoder.shares());
+        assertEquals("CFLT", stockTradeDecoder.symbol());
+        assertEquals(Exchange.NASDAQ, stockTradeDecoder.exchange());
+        assertEquals(TxnType.BUY, stockTradeDecoder.txnType());
+    }
+
+    StockTradeEncoder stockTradeEncoder(double price, int shares, ByteBuffer byteBuffer) {
+        StockTradeEncoder stockTradeEncoder = new StockTradeEncoder();
         UnsafeBuffer unsafeBuffer = new UnsafeBuffer(byteBuffer);
         MessageHeaderEncoder messageHeaderEncoder = new MessageHeaderEncoder();
-        StockTradeEncoder stockTradeEncoder = new StockTradeEncoder();
-        float price = 99.99f;
-        int shares = 3_000;
         String symbol = "CFLT";
         Exchange exchange = Exchange.NASDAQ;
         TxnType txnType = TxnType.BUY;
@@ -69,15 +112,10 @@ class SerializationTests {
                 .exchange(exchange)
                 .txnType(txnType);
 
-        StockTradeDecoder stockTradeDecoder = sbeDeserializer.deserialize("topic", sbeSerializer.serialize("topic", stockTradeEncoder));
-        assertEquals(price, stockTradeDecoder.price());
-        assertEquals(shares, stockTradeDecoder.shares());
-        assertEquals(symbol, stockTradeDecoder.symbol());
-        assertEquals(exchange, stockTradeDecoder.exchange());
-        assertEquals(txnType, stockTradeDecoder.txnType());
+        return stockTradeEncoder;
     }
 
-    StockAvro getStockAvro() {
+    StockAvro stockAvro() {
         StockAvro.Builder builder = StockAvro.newBuilder();
         builder.setType(io.confluent.developer.avro.TxnType.BUY);
         builder.setPrice(101.0);
@@ -87,7 +125,7 @@ class SerializationTests {
         return builder.build();
     }
 
-    StockProto getStockProto() {
+    StockProto stockProto() {
         StockProto.Builder stockProtoBuilder = StockProto.newBuilder();
         stockProtoBuilder.setPrice(101.0);
         stockProtoBuilder.setShares(70_000);

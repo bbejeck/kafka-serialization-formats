@@ -14,14 +14,15 @@ import java.nio.ByteBuffer;
  * Time: 10:18 AM
  */
 public class SbeDeserializer implements Deserializer<StockTradeDecoder> {
-    ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
-    UnsafeBuffer unsafeBuffer = new UnsafeBuffer(byteBuffer);
-    MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
-    StockTradeDecoder stockTradeDecoder = new StockTradeDecoder();
 
     @Override
     public StockTradeDecoder deserialize(String s, byte[] bytes) {
-        byteBuffer.clear();
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(bytes.length);
+        UnsafeBuffer unsafeBuffer = new UnsafeBuffer(byteBuffer);
+        MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
+        StockTradeDecoder stockTradeDecoder = new StockTradeDecoder();
+
         byteBuffer.put(bytes);
         stockTradeDecoder.wrapAndApplyHeader(unsafeBuffer, 0, messageHeaderDecoder);
         return stockTradeDecoder;
