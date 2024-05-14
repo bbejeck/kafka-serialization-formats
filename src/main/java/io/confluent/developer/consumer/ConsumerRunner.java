@@ -57,12 +57,12 @@ public class ConsumerRunner {
                 props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
                 props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG, StockAvro.class);
                 props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
-                props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-group3");
+                props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-group");
                 consumeRecords(numRecords, props, "avro-input");
             }
             case SBE -> {
                 props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, SbeDeserializer.class);
-                props.put(ConsumerConfig.GROUP_ID_CONFIG, "sbe-group4");
+                props.put(ConsumerConfig.GROUP_ID_CONFIG, "sbe-group");
                 consumeRecords(numRecords, props, "sbe-input");
             }
             default -> {
