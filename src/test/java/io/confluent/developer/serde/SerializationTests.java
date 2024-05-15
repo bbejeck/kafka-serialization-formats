@@ -1,6 +1,8 @@
 package io.confluent.developer.serde;
 
 import baseline.*;
+import com.esotericsoftware.kryo.Kryo;
+import io.confluent.developer.Stock;
 import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.supplier.SbeRecordSupplier;
@@ -38,6 +40,23 @@ class SerializationTests {
         protobufSerializer.configure(config, false);
         avroSerializer.configure(config, false);
     }
+
+    @Test
+    void kryoRoundTripTest() {
+        KryoSerializer kryoSerializer = new KryoSerializer();
+        KryoDeserializer kryoDeserializer = new KryoDeserializer();
+        Stock stockOne = new Stock(100.00, 5_000L, "CFLT", "NASDAQ", io.confluent.developer.TxnType.BUY);
+        Stock stockTwo = new Stock(500.00, 105_000L, "AAPL", "NASDAQ", io.confluent.developer.TxnType.BUY);
+
+        byte[] bytesOne = kryoSerializer.serialize("topic", stockOne);
+        byte[] bytesTwo = kryoSerializer.serialize("topic", stockTwo);
+
+        Stock deserializedStockOne = kryoDeserializer.deserialize("topic", bytesOne);
+        Stock deserializedStockTwo = kryoDeserializer.deserialize("topic", bytesTwo);
+        assertEquals(stockOne, deserializedStockOne);
+        assertEquals(stockTwo, deserializedStockTwo);
+    }
+
     
     @Test
     void serializedRecordSizesTest() {

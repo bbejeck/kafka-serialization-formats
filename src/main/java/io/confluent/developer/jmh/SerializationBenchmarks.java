@@ -11,6 +11,8 @@ import io.confluent.developer.TxnType;
 import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.proto.Exchange;
 import io.confluent.developer.proto.StockProto;
+import io.confluent.developer.serde.KryoDeserializer;
+import io.confluent.developer.serde.KryoSerializer;
 import io.confluent.developer.serde.SbeDeserializer;
 import io.confluent.developer.serde.SbeSerializer;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
@@ -115,6 +117,23 @@ public class SerializationBenchmarks {
              stockProto = stockProto();
              protoBytes = stockProto.toByteArray();
        }
+    }
+
+    @State(Scope.Benchmark)
+    public static class KryoState {
+        KryoSerializer kryoSerializer;
+        KryoDeserializer kryoDeserializer;
+        Stock stock;
+        byte[] serializedStock;
+
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            kryoSerializer = new KryoSerializer();
+            kryoDeserializer = new KryoDeserializer();
+            stock = new Stock(100.00, 10_000, "CFLT", "NASDAQ", TxnType.BUY);
+            serializedStock = kryoSerializer.serialize("topic", stock);
+        }
     }
 
     private static StockProto stockProto() {
@@ -265,6 +284,18 @@ public class SerializationBenchmarks {
         byte[] bytes = state.fullDirectBytes;
        StockTradeDecoder stockTradeDecoder = state.sbeDeserializer.deserialize("topic", bytes);
        bh.consume(stockTradeDecoder);
+   }
+
+   @Benchmark
+    public void measureKryoSerialization(KryoState state, Blackhole bh) {
+        byte[] serializedStock = state.kryoSerializer.serialize("topic", state.stock);
+       bh.consume(serializedStock);
+   }
+
+   @Benchmark
+    public void measureKryoDeserialization(KryoState state, Blackhole bh) {
+        Stock deserializedStock = state.kryoDeserializer.deserialize("topic", state.serializedStock);
+       bh.consume(deserializedStock);
    }
 
     
