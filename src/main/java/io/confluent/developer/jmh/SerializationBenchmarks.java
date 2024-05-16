@@ -25,8 +25,12 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.kafka.common.serialization.ByteBufferSerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+
 import org.openjdk.jmh.annotations.*;
-import org.openjdk.jmh.infra.Blackhole;
+import org.openjdk.jmh.runner.Runner;
+import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.runner.options.Options;
+import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -50,8 +54,8 @@ public class SerializationBenchmarks {
 
     @State(Scope.Benchmark)
     public static class JacksonState {
-        public ObjectMapper mapper;
-        public io.confluent.developer.Stock jrSTock;
+        ObjectMapper mapper;
+        io.confluent.developer.Stock jrSTock;
         byte[] jacksonBytes;
 
         @Setup(Level.Trial)
@@ -64,19 +68,21 @@ public class SerializationBenchmarks {
 
     @State(Scope.Benchmark)
     public static class SchemaRegistryAvroState {
-        KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer();
-        KafkaAvroDeserializer avroDeserializer = new KafkaAvroDeserializer();
+        KafkaAvroSerializer avroSerializer;
+        KafkaAvroDeserializer avroDeserializer;
         byte[] avroBytes;
         StockAvro stockAvro;
 
         @Setup(Level.Trial)
-        public void setup(){
-         stockAvro = StockAvro.newBuilder().setSymbol("CFLT")
+        public void setup() {
+            avroSerializer = new KafkaAvroSerializer();
+            avroDeserializer = new KafkaAvroDeserializer();
+            stockAvro = StockAvro.newBuilder().setSymbol("CFLT")
                     .setPrice(100.00)
                     .setShares(10_000)
                     .setExchange(io.confluent.developer.avro.Exchange.NASDAQ)
-                 .setType(io.confluent.developer.avro.TxnType.BUY)
-                 .build();
+                    .setType(io.confluent.developer.avro.TxnType.BUY)
+                    .build();
             Map<String, Object> config = new HashMap<>();
             config.put("schema.registry.url", "mock://localhost:8081");
             avroSerializer.configure(config, false);
@@ -90,13 +96,15 @@ public class SerializationBenchmarks {
 
     @State(Scope.Benchmark)
     public static class SchemaRegistryProtoState {
-        KafkaProtobufSerializer<StockProto> protobufSerializer = new KafkaProtobufSerializer<>();
-        KafkaProtobufDeserializer<StockProto> protobufDeserializer = new KafkaProtobufDeserializer<>();
+        KafkaProtobufSerializer<StockProto> protobufSerializer;
+        KafkaProtobufDeserializer<StockProto> protobufDeserializer;
         byte[] serializedStock;
         StockProto stockProto;
 
         @Setup(Level.Trial)
         public void setup() {
+            protobufSerializer = new KafkaProtobufSerializer<>();
+            protobufDeserializer = new KafkaProtobufDeserializer<>();
             stockProto = stockProto();
             Map<String, Object> config = new HashMap<>();
             config.put("schema.registry.url", "mock://localhost:8081");
@@ -109,14 +117,14 @@ public class SerializationBenchmarks {
 
     @State(Scope.Benchmark)
     public static class PlainProtoState {
-       byte[] protoBytes;
-       StockProto stockProto;
+        byte[] protoBytes;
+        StockProto stockProto;
 
-       @Setup(Level.Trial)
-       public void setUp() {
-             stockProto = stockProto();
-             protoBytes = stockProto.toByteArray();
-       }
+        @Setup(Level.Trial)
+        public void setUp() {
+            stockProto = stockProto();
+            protoBytes = stockProto.toByteArray();
+        }
     }
 
     @State(Scope.Benchmark)
@@ -149,19 +157,28 @@ public class SerializationBenchmarks {
 
     @State(Scope.Benchmark)
     public static class SbeState {
-        MessageHeaderEncoder messageHeaderEncoder = new MessageHeaderEncoder();
-        StockTradeEncoder nonDirectStockTradeEncoder = new StockTradeEncoder();
-        StockTradeEncoder directStockTradeEncoder = new StockTradeEncoder();
-        StockTradeEncoder tenTwentyfourStockTradeEncoder = new StockTradeEncoder();
+        MessageHeaderEncoder messageHeaderEncoder;
+        StockTradeEncoder nonDirectStockTradeEncoder;
+        StockTradeEncoder directStockTradeEncoder;
+        StockTradeEncoder tenTwentyfourStockTradeEncoder;
         byte[] nonDirectBytes;
         byte[] directBytes;
         byte[] fullDirectBytes;
-        Serializer<StockTradeEncoder> sbeSerializer = new SbeSerializer();
-        Deserializer<StockTradeDecoder> sbeDeserializer = new SbeDeserializer();
-        ByteBufferSerializer byteBufferSerializer = new ByteBufferSerializer();
+        Serializer<StockTradeEncoder> sbeSerializer;
+        Deserializer<StockTradeDecoder> sbeDeserializer;
+        ByteBufferSerializer byteBufferSerializer;
 
         @Setup(Level.Trial)
         public void setUp() {
+
+            messageHeaderEncoder = new MessageHeaderEncoder();
+            nonDirectStockTradeEncoder = new StockTradeEncoder();
+            directStockTradeEncoder = new StockTradeEncoder();
+            tenTwentyfourStockTradeEncoder = new StockTradeEncoder();
+            sbeSerializer = new SbeSerializer();
+            sbeDeserializer = new SbeDeserializer();
+            byteBufferSerializer = new ByteBufferSerializer();
+
             ByteBuffer localDirectByteBuffer = ByteBuffer.allocateDirect(26);
             UnsafeBuffer localDirectUnsafeBuffer = new UnsafeBuffer(localDirectByteBuffer);
 
@@ -177,7 +194,7 @@ public class SerializationBenchmarks {
                     .symbol("CFLT")
                     .exchange(baseline.Exchange.NASDAQ)
                     .txnType(baseline.TxnType.BUY);
-                          // Serializes the underlying Direct Byte Buffer
+            // Serializes the underlying Direct Byte Buffer
             directBytes = sbeSerializer.serialize("topic", directStockTradeEncoder);
 
             nonDirectStockTradeEncoder.wrapAndApplyHeader(localNonDirectUnsafeBuffer, 0, messageHeaderEncoder)
@@ -200,104 +217,95 @@ public class SerializationBenchmarks {
     }
 
     @Benchmark
-    public void measureJacksonSerialization(JacksonState state, Blackhole bh) throws JsonProcessingException {
-        bh.consume(state.mapper.writeValueAsBytes(state.jrSTock));
+    public byte[] measureJacksonSerialization(JacksonState state) throws JsonProcessingException {
+        return state.mapper.writeValueAsBytes(state.jrSTock);
     }
 
     @Benchmark
-    public void measureJacksonDeserialization(JacksonState state, Blackhole bh) throws IOException {
-        Stock stock = state.mapper.readValue(state.jacksonBytes, Stock.class);
-        bh.consume(stock);
+    public Stock measureJacksonDeserialization(JacksonState state) throws IOException {
+        return state.mapper.readValue(state.jacksonBytes, Stock.class);
     }
 
     @Benchmark
-    public void measureKafkaSchemaRegistryAvroSerialization(SchemaRegistryAvroState state, Blackhole bh) {
-        byte[] avroBytes = state.avroSerializer.serialize("topic", state.stockAvro);
-        bh.consume(avroBytes);
+    public byte[] measureKafkaSchemaRegistryAvroSerialization(SchemaRegistryAvroState state) {
+        return state.avroSerializer.serialize("topic", state.stockAvro);
     }
 
     @Benchmark
-    public void measureKafkaSchemaRegistryAvroDeserialization(SchemaRegistryAvroState state, Blackhole bh) {
-        StockAvro stockAvro = (StockAvro) state.avroDeserializer.deserialize("topic", state.avroBytes);
-        bh.consume(stockAvro);
+    public StockAvro measureKafkaSchemaRegistryAvroDeserialization(SchemaRegistryAvroState state) {
+        return (StockAvro) state.avroDeserializer.deserialize("topic", state.avroBytes);
     }
 
     @Benchmark
-    public void measureKafkaSchemaRegistryProtobufSerialization(SchemaRegistryProtoState state, Blackhole bh) {
-        byte[] protoBytes = state.protobufSerializer.serialize("topic", state.stockProto);
-        bh.consume(protoBytes);
+    public byte[] measureKafkaSchemaRegistryProtobufSerialization(SchemaRegistryProtoState state) {
+        return state.protobufSerializer.serialize("topic", state.stockProto);
     }
 
     @Benchmark
-    public void measureKafkaSchemaRegistryProtobufDeserialization(SchemaRegistryProtoState state, Blackhole bh) {
-        StockProto stockProto = state.protobufDeserializer.deserialize("topic", state.serializedStock);
-        bh.consume(stockProto);
+    public StockProto measureKafkaSchemaRegistryProtobufDeserialization(SchemaRegistryProtoState state) {
+        return state.protobufDeserializer.deserialize("topic", state.serializedStock);
     }
 
     @Benchmark
-    public void measureRawProtobufSerialization(PlainProtoState state, Blackhole bh)  {
-        byte[] protoBytes = state.stockProto.toByteArray();
-        bh.consume(protoBytes);
+    public byte[] measureRawProtobufSerialization(PlainProtoState state) {
+        return state.stockProto.toByteArray();
     }
 
     @Benchmark
-    public void measureRawProtobufDeserialization(PlainProtoState state, Blackhole bh) throws InvalidProtocolBufferException {
-        StockProto stockProto = StockProto.parseFrom(state.protoBytes);
-        bh.consume(stockProto);
+    public StockProto measureRawProtobufDeserialization(PlainProtoState state) throws InvalidProtocolBufferException {
+        return StockProto.parseFrom(state.protoBytes);
     }
 
     @Benchmark
-    public void measureSbeSerializationDirectByteBuffer(SbeState state, Blackhole bh) {
-        byte[] bytes = state.sbeSerializer.serialize("topic", state.directStockTradeEncoder);
-        bh.consume(bytes);
+    public byte[] measureSbeSerializationDirectByteBuffer(SbeState state) {
+        return state.sbeSerializer.serialize("topic", state.directStockTradeEncoder);
     }
 
     @Benchmark
-    public void measureSbeDeserializationDirectByteBuffer(SbeState state, Blackhole bh) {
+    public StockTradeDecoder measureSbeDeserializationDirectByteBuffer(SbeState state) {
         byte[] bytes = state.directBytes;
-        StockTradeDecoder stockTradeDecoder =  state.sbeDeserializer.deserialize("topic", bytes);
-        bh.consume(stockTradeDecoder);
+        return state.sbeDeserializer.deserialize("topic", bytes);
     }
 
     @Benchmark
-    public void measureSbeSerializationNonDirectByteBuffer(SbeState state, Blackhole bh) {
-        byte[] bytes = state.sbeSerializer.serialize("topic", state.nonDirectStockTradeEncoder);
-        bh.consume(bytes);
+    public byte[] measureSbeSerializationNonDirectByteBuffer(SbeState state) {
+        return state.sbeSerializer.serialize("topic", state.nonDirectStockTradeEncoder);
     }
 
     @Benchmark
-    public void measureSbeDeserializationNonDirectByteBuffer(SbeState state, Blackhole bh) {
+    public StockTradeDecoder measureSbeDeserializationNonDirectByteBuffer(SbeState state) {
         byte[] bytes = state.nonDirectBytes;
-        StockTradeDecoder stockTradeDecoder = state.sbeDeserializer.deserialize("topic", bytes);
-        bh.consume(stockTradeDecoder);
+        return state.sbeDeserializer.deserialize("topic", bytes);
     }
 
     @Benchmark
-    public void measureSbeSerializationTenTwentyfourStockTradeEncoder(SbeState state, Blackhole bh) {
-        ByteBuffer byteBuffer =  state.tenTwentyfourStockTradeEncoder.buffer().byteBuffer();
-        byte[] bytes = state.byteBufferSerializer.serialize("topic", byteBuffer);
-        bh.consume(bytes);
+    public byte[] measureSbeSerializationTenTwentyfourStockTradeEncoder(SbeState state) {
+        ByteBuffer byteBuffer = state.tenTwentyfourStockTradeEncoder.buffer().byteBuffer();
+        return state.byteBufferSerializer.serialize("topic", byteBuffer);
     }
 
-   @Benchmark
-    public void measureSbeDeserializationTenTwentyfourStockTradeDecoder(SbeState state, Blackhole bh) {
+    @Benchmark
+    public StockTradeDecoder measureSbeDeserializationTenTwentyfourStockTradeDecoder(SbeState state) {
         byte[] bytes = state.fullDirectBytes;
-       StockTradeDecoder stockTradeDecoder = state.sbeDeserializer.deserialize("topic", bytes);
-       bh.consume(stockTradeDecoder);
-   }
+        return state.sbeDeserializer.deserialize("topic", bytes);
+    }
 
-   @Benchmark
-    public void measureKryoSerialization(KryoState state, Blackhole bh) {
-        byte[] serializedStock = state.kryoSerializer.serialize("topic", state.stock);
-       bh.consume(serializedStock);
-   }
+    @Benchmark
+    public byte[] measureKryoSerialization(KryoState state) {
+        return state.kryoSerializer.serialize("topic", state.stock);
+    }
 
-   @Benchmark
-    public void measureKryoDeserialization(KryoState state, Blackhole bh) {
-        Stock deserializedStock = state.kryoDeserializer.deserialize("topic", state.serializedStock);
-       bh.consume(deserializedStock);
-   }
+    @Benchmark
+    public Stock measureKryoDeserialization(KryoState state) {
+        return state.kryoDeserializer.deserialize("topic", state.serializedStock);
+    }
 
-    
 
+    public static void main(String[] args) throws RunnerException {
+        Options options = new OptionsBuilder()
+                .include(SerializationBenchmarks.class.getName() + ".*")
+                .build();
+
+        new Runner(options).run();
+    }
 }

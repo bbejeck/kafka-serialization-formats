@@ -1,7 +1,6 @@
 package io.confluent.developer.serde;
 
 import baseline.*;
-import com.esotericsoftware.kryo.Kryo;
 import io.confluent.developer.Stock;
 import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.proto.StockProto;
@@ -16,7 +15,7 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * User: Bill Bejeck
