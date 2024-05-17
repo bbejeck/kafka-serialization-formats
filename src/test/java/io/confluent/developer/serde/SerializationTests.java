@@ -1,6 +1,7 @@
 package io.confluent.developer.serde;
 
 import baseline.*;
+import com.esotericsoftware.kryo.Kryo;
 import io.confluent.developer.Stock;
 import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.proto.StockProto;
@@ -29,6 +30,8 @@ class SerializationTests {
     private final KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer();
     private final SbeDeserializer sbeNonDirectDeserializer = new SbeDeserializer();
     private final SbeSerializer sbeSerializer = new SbeSerializer();
+    private final JacksonRecordSerializer jacksonRecordSerializer = new JacksonRecordSerializer();
+    private final KryoSerializer kryoSerializer = new KryoSerializer();
     private final double price = 99.99;
     private final int shares = 3_000;
 
@@ -61,14 +64,19 @@ class SerializationTests {
     void serializedRecordSizesTest() {
        StockProto stockProto = stockProto();
        StockAvro stockAvro = stockAvro();
+       Stock stock = javaRecordStock();
        StockTradeEncoder stockTradeEncoder = sbeRecordSupplier.get();
        byte[] protoSerialized = protobufSerializer.serialize("topic", stockProto);
        byte[] serializedAvro = avroSerializer.serialize("topic", stockAvro);
        byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
+       byte[] kryoBytes =  kryoSerializer.serialize("topic", stock);
+       byte[] jacksonBytes = jacksonRecordSerializer.serialize("topic", stock);
 
        assertEquals(27, protoSerialized.length);
        assertEquals(23, serializedAvro.length);
        assertEquals(26, sbeBytes.length);
+       assertEquals(26, kryoBytes.length);
+       assertEquals(79, jacksonBytes.length);
     }
 
     @Test
@@ -131,6 +139,10 @@ class SerializationTests {
                 .txnType(txnType);
 
         return stockTradeEncoder;
+    }
+
+    Stock javaRecordStock() {
+        return new Stock(101.1, 70_000L, "CFLT", "NASDAQ", io.confluent.developer.TxnType.BUY);
     }
 
     StockAvro stockAvro() {

@@ -25,12 +25,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.kafka.common.serialization.ByteBufferSerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-
 import org.openjdk.jmh.annotations.*;
-import org.openjdk.jmh.runner.Runner;
-import org.openjdk.jmh.runner.RunnerException;
-import org.openjdk.jmh.runner.options.Options;
-import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -49,7 +44,6 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 5)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-@State(Scope.Benchmark)
 public class SerializationBenchmarks {
 
     @State(Scope.Benchmark)
@@ -299,13 +293,5 @@ public class SerializationBenchmarks {
     public Stock measureKryoDeserialization(KryoState state) {
         return state.kryoDeserializer.deserialize("topic", state.serializedStock);
     }
-
-
-    public static void main(String[] args) throws RunnerException {
-        Options options = new OptionsBuilder()
-                .include(SerializationBenchmarks.class.getName() + ".*")
-                .build();
-
-        new Runner(options).run();
-    }
+    
 }

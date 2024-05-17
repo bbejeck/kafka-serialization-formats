@@ -48,3 +48,6 @@ confluent.properties
 config.properties
 generated-flatbuffers/
 generated-sbe/
+jmh-result.json
+**/*/profile.jfr
+.profileconfig.json
