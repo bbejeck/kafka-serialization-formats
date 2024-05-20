@@ -1,11 +1,13 @@
 package io.confluent.developer.supplier;
 
-import baseline.*;
+import baseline.Exchange;
+import baseline.MessageHeaderEncoder;
+import baseline.StockTradeEncoder;
+import baseline.TxnType;
 import net.datafaker.Faker;
 import org.agrona.concurrent.UnsafeBuffer;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.function.Supplier;
 
 /**
