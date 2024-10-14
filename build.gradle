@@ -86,6 +86,7 @@ dependencies {
     implementation 'org.apache.avro:avro:1.11.3'
     implementation 'uk.co.real-logic:sbe-all:1.31.1'
     implementation 'com.esotericsoftware:kryo:5.6.0'
+    implementation 'org.apache.fury:fury-core:0.8.0'
 
     implementation "io.confluent:kafka-avro-serializer:7.6.0"
     implementation "io.confluent:kafka-protobuf-serializer:7.6.0"
