@@ -22,6 +22,8 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.apache.fury.Fury;
+import org.apache.fury.config.Language;
 import org.apache.kafka.common.serialization.ByteBufferSerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -42,8 +44,8 @@ import java.util.concurrent.TimeUnit;
 @Fork(value = 1)
 @Warmup(iterations = 5)
 @Measurement(iterations = 5)
-@BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
+@BenchmarkMode({Mode.AverageTime, Mode.Throughput})
+@OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class SerializationBenchmarks {
 
     @State(Scope.Benchmark)
@@ -208,6 +210,31 @@ public class SerializationBenchmarks {
             fullDirectBytes = byteBufferSerializer.serialize("topic", tenTwentyfourStockTradeEncoder.buffer().byteBuffer());
 
         }
+    }
+
+    @State( Scope.Benchmark )
+    public static class FuryState {
+          Fury fury;
+          Stock transaction;
+          byte[] serializedTransaction;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            fury = Fury.builder().withLanguage(Language.JAVA).requireClassRegistration(true).build();
+            transaction = new Stock(100.00, 10_000, "CFLT", "NASDAQ", TxnType.BUY);
+            fury.register(Stock.class);
+            fury.register(TxnType.class);
+            serializedTransaction = fury.serialize(transaction);
+        }
+    }
+    @Benchmark
+    public byte[] measureFurySerialization(FuryState furyState) {
+        return furyState.fury.serialize(furyState.transaction);
+    }
+
+    @Benchmark
+    public Stock measureFuryDeserialization(FuryState furyState) {
+        return (Stock) furyState.fury.deserialize(furyState.serializedTransaction);
     }
 
     @Benchmark
