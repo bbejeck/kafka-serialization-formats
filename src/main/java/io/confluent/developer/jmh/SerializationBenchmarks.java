@@ -22,8 +22,8 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.apache.fury.Fury;
-import org.apache.fury.config.Language;
+import org.apache.fory.Fory;
+import org.apache.fory.config.Language;
 import org.apache.kafka.common.serialization.ByteBufferSerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -214,13 +214,13 @@ public class SerializationBenchmarks {
 
     @State( Scope.Benchmark )
     public static class FuryState {
-          Fury fury;
+          Fory fury;
           Stock transaction;
           byte[] serializedTransaction;
 
         @Setup(Level.Trial)
         public void setUp() {
-            fury = Fury.builder().withLanguage(Language.JAVA).requireClassRegistration(true).build();
+            fury = Fory.builder().withLanguage(Language.JAVA).requireClassRegistration(true).build();
             transaction = new Stock(100.00, 10_000, "CFLT", "NASDAQ", TxnType.BUY);
             fury.register(Stock.class);
             fury.register(TxnType.class);

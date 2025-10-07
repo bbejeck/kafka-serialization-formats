@@ -47,7 +47,7 @@ shadowJar {
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:3.25.3'
+        artifact = 'com.google.protobuf:protoc:4.29.3'
     }
 }
 
@@ -75,32 +75,32 @@ processResources {
 
 
 dependencies {
-    implementation 'org.apache.kafka:kafka-clients:3.8.0'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
-    implementation 'net.datafaker:datafaker:2.3.0'
+    implementation 'org.apache.kafka:kafka-clients:4.1.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
+    implementation 'net.datafaker:datafaker:2.5.1'
 
     implementation 'org.openjdk.jmh:jmh-core:1.37'
     implementation 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
     annotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
-    implementation 'com.google.protobuf:protobuf-java:4.28.2'
-    implementation 'org.apache.avro:avro:1.11.4'
-    implementation 'uk.co.real-logic:sbe-all:1.34.1'
-    implementation 'com.esotericsoftware:kryo:5.6.0'
-    implementation 'org.apache.fury:fury-core:0.8.0'
+    implementation 'com.google.protobuf:protobuf-java:4.29.3'
+    implementation 'org.apache.avro:avro:1.12.0'
+    implementation 'uk.co.real-logic:sbe-all:1.35.6'
+    implementation 'com.esotericsoftware:kryo:5.6.2'
+    implementation 'org.apache.fory:fory-core:0.12.3'
 
-    implementation "io.confluent:kafka-avro-serializer:7.6.0"
-    implementation "io.confluent:kafka-protobuf-serializer:7.6.0"
-    implementation "io.confluent:kafka-json-serializer:7.6.0"
-    implementation "io.confluent:kafka-schema-registry-client:7.6.0"
-    implementation "io.confluent:kafka-protobuf-provider:7.6.0"
+    implementation "io.confluent:kafka-avro-serializer:8.0.0"
+    implementation "io.confluent:kafka-protobuf-serializer:8.0.0"
+    implementation "io.confluent:kafka-json-serializer:8.0.0"
+    implementation "io.confluent:kafka-schema-registry-client:8.0.0"
+    implementation "io.confluent:kafka-protobuf-provider:8.0.0"
 
-    implementation 'org.slf4j:slf4j-simple:2.0.13'
+    implementation 'org.slf4j:slf4j-simple:2.0.17'
 
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.0-M1'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.3'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.13.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.13.4'
 }
-
 
 test {
     useJUnitPlatform()
+    jvmArgs("--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED")
 }
