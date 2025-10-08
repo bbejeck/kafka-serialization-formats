@@ -10,4 +10,5 @@
 build/
 .gradle/
 generated-sbe/
+generated-capnp/
 

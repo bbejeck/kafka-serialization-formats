@@ -8,7 +8,7 @@ plugins {
     id 'java'
     id "com.google.protobuf" version "0.9.4"
     id "com.github.davidmc24.gradle.plugin.avro" version "1.9.1"
-    id 'com.github.johnrengelman.shadow'  version "8.1.1"
+    id 'com.gradleup.shadow' version '9.2.2'
 }
 
 group = 'io.confluent.developer'
@@ -29,7 +29,7 @@ java {
 sourceSets {
     main {
         java {
-            srcDirs 'src/main/java', 'generated-sbe'
+            srcDirs 'src/main/java', 'generated-sbe', 'generated-capnp'
         }
     }
 }
@@ -61,12 +61,33 @@ tasks.register('sbe', JavaExec) {
     args "src/main/resources/sbe-schema/stock-schema.xml"
 }
 
+tasks.register('capnp', Exec) {
+    group = "Execution"
+    description = "Runs Cap'n Proto compiler to generate Java code from schemas"
+    commandLine 'capnp', 'compile', '-o', './capnpc-java:./generated-capnp',
+            'src/main/resources/capnp-schema/stock-schema.capnp',
+            '--src-prefix=src/main/resources/capnp-schema'
+}
+
+tasks.register('jmh', JavaExec) {
+    dependsOn shadowJar
+    group = "benchmark"
+    description = "Run JMH benchmarks"
+    classpath = files(shadowJar.archiveFile)
+    mainClass = "org.openjdk.jmh.Main"
+    jvmArgs = [
+            "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED",
+            "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
+            "--add-opens=java.base/java.nio=ALL-UNNAMED"
+    ]
+}
+
 clean.doLast {
     file('generated-sbe/baseline').deleteDir()
 }
 
 compileJava {
-    dependsOn(generateProto, sbe)
+    dependsOn(generateProto, sbe, capnp)
 }
 
 processResources {
@@ -84,9 +105,10 @@ dependencies {
     annotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
     implementation 'com.google.protobuf:protobuf-java:4.29.3'
     implementation 'org.apache.avro:avro:1.12.0'
-    implementation 'uk.co.real-logic:sbe-all:1.35.6'
+    implementation 'uk.co.real-logic:sbe-all:1.36.0'
     implementation 'com.esotericsoftware:kryo:5.6.2'
     implementation 'org.apache.fory:fory-core:0.12.3'
+    implementation 'org.capnproto:runtime:0.1.16'
 
     implementation "io.confluent:kafka-avro-serializer:8.0.0"
     implementation "io.confluent:kafka-protobuf-serializer:8.0.0"
