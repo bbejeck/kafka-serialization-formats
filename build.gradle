@@ -82,6 +82,10 @@ tasks.register('jmh', JavaExec) {
     ]
 }
 
+clean {
+    delete fileTree('generated-capnp/') { include '*/.java' }
+}
+
 clean.doLast {
     file('generated-sbe/baseline').deleteDir()
 }
