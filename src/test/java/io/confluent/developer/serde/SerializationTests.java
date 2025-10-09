@@ -3,15 +3,22 @@ package io.confluent.developer.serde;
 import baseline.*;
 import com.esotericsoftware.kryo.Kryo;
 import io.confluent.developer.Stock;
+import io.confluent.developer.StockTradeCapnp;
 import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.supplier.SbeRecordSupplier;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.capnproto.MessageBuilder;
+import org.capnproto.MessageReader;
+import org.capnproto.Serialize;
+import org.capnproto.SerializePacked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,6 +39,7 @@ class SerializationTests {
     private final SbeSerializer sbeSerializer = new SbeSerializer();
     private final JacksonRecordSerializer jacksonRecordSerializer = new JacksonRecordSerializer();
     private final KryoSerializer kryoSerializer = new KryoSerializer();
+    private final MessageBuilder messageBuilder = new MessageBuilder();
     private final double price = 99.99;
     private final int shares = 3_000;
 
@@ -44,19 +52,49 @@ class SerializationTests {
     }
 
     @Test
+    void capnpRoundTripTest() throws IOException {
+        StockTradeCapnp.StockTrade.Builder stockTrade = messageBuilder.initRoot(StockTradeCapnp.StockTrade.factory);
+        stockTrade.setPrice(price);
+        stockTrade.setShares(shares);
+        stockTrade.setSymbol("CFLT");
+        stockTrade.setExchange(StockTradeCapnp.Exchange.NASDAQ);
+        stockTrade.setTxnType(StockTradeCapnp.TxnType.BUY);
+        
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ByteBuffer[] segments = messageBuilder.getSegmentsForOutput();
+        for (ByteBuffer segment : segments) {
+            byte[] segmentBytes = new byte[segment.remaining()];
+            segment.get(segmentBytes);
+            baos.write(segmentBytes);
+        }
+        byte[] serializedCapnp = baos.toByteArray();
+        ByteBuffer byteBuffer = ByteBuffer.allocate(serializedCapnp.length);
+        byteBuffer.put(serializedCapnp);
+        byteBuffer.flip();
+        MessageReader messageReader = Serialize.read(byteBuffer);
+        StockTradeCapnp.StockTrade.Reader stockTradeReader = messageReader.getRoot(StockTradeCapnp.StockTrade.factory);
+        assertEquals(stockTrade.getPrice(), stockTradeReader.getPrice());
+        assertEquals(stockTrade.getShares(), stockTradeReader.getShares());
+        assertEquals(stockTrade.getSymbol().toString(), stockTradeReader.getSymbol().toString());
+        assertEquals(stockTrade.getExchange(), stockTradeReader.getExchange());
+        assertEquals(stockTrade.getTxnType(), stockTradeReader.getTxnType());
+    }
+
+    @Test
     void kryoRoundTripTest() {
-        KryoSerializer kryoSerializer = new KryoSerializer();
-        KryoDeserializer kryoDeserializer = new KryoDeserializer();
-        Stock stockOne = new Stock(100.00, 5_000L, "CFLT", "NASDAQ", io.confluent.developer.TxnType.BUY);
-        Stock stockTwo = new Stock(500.00, 105_000L, "AAPL", "NASDAQ", io.confluent.developer.TxnType.BUY);
+        try (KryoSerializer kryoSerializer = new KryoSerializer();
+            KryoDeserializer kryoDeserializer = new KryoDeserializer()) {
+            Stock stockOne = new Stock(100.00, 5_000L, "CFLT", "NASDAQ", io.confluent.developer.TxnType.BUY);
+            Stock stockTwo = new Stock(500.00, 105_000L, "AAPL", "NASDAQ", io.confluent.developer.TxnType.BUY);
 
-        byte[] bytesOne = kryoSerializer.serialize("topic", stockOne);
-        byte[] bytesTwo = kryoSerializer.serialize("topic", stockTwo);
+            byte[] bytesOne = kryoSerializer.serialize("topic", stockOne);
+            byte[] bytesTwo = kryoSerializer.serialize("topic", stockTwo);
 
-        Stock deserializedStockOne = kryoDeserializer.deserialize("topic", bytesOne);
-        Stock deserializedStockTwo = kryoDeserializer.deserialize("topic", bytesTwo);
-        assertEquals(stockOne, deserializedStockOne);
-        assertEquals(stockTwo, deserializedStockTwo);
+            Stock deserializedStockOne = kryoDeserializer.deserialize("topic", bytesOne);
+            Stock deserializedStockTwo = kryoDeserializer.deserialize("topic", bytesTwo);
+            assertEquals(stockOne, deserializedStockOne);
+            assertEquals(stockTwo, deserializedStockTwo);
+        }
     }
 
     
