@@ -68,7 +68,7 @@ class SerializationTests {
             baos.write(segmentBytes);
         }
         byte[] serializedCapnp = baos.toByteArray();
-        ByteBuffer byteBuffer = ByteBuffer.allocate(serializedCapnp.length);
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024 * 5);
         byteBuffer.put(serializedCapnp);
         byteBuffer.flip();
         MessageReader messageReader = Serialize.read(byteBuffer);

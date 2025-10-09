@@ -11,4 +11,5 @@ build/
 .gradle/
 generated-sbe/
 generated-capnp/
+capnpc-java
 
