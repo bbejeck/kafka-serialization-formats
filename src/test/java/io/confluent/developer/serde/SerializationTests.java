@@ -10,6 +10,8 @@ import io.confluent.developer.supplier.SbeRecordSupplier;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.capnproto.ArrayInputStream;
+import org.capnproto.ArrayOutputStream;
 import org.capnproto.MessageBuilder;
 import org.capnproto.MessageReader;
 import org.capnproto.Serialize;
@@ -19,7 +21,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.Writer;
 import java.nio.ByteBuffer;
+import java.nio.channels.WritableByteChannel;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -39,7 +43,6 @@ class SerializationTests {
     private final SbeSerializer sbeSerializer = new SbeSerializer();
     private final JacksonRecordSerializer jacksonRecordSerializer = new JacksonRecordSerializer();
     private final KryoSerializer kryoSerializer = new KryoSerializer();
-    private final MessageBuilder messageBuilder = new MessageBuilder();
     private final double price = 99.99;
     private final int shares = 3_000;
 
@@ -53,25 +56,19 @@ class SerializationTests {
 
     @Test
     void capnpRoundTripTest() throws IOException {
+        MessageBuilder messageBuilder = new MessageBuilder();
         StockTradeCapnp.StockTrade.Builder stockTrade = messageBuilder.initRoot(StockTradeCapnp.StockTrade.factory);
         stockTrade.setPrice(price);
         stockTrade.setShares(shares);
         stockTrade.setSymbol("CFLT");
         stockTrade.setExchange(StockTradeCapnp.Exchange.NASDAQ);
         stockTrade.setTxnType(StockTradeCapnp.TxnType.BUY);
-        
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ByteBuffer[] segments = messageBuilder.getSegmentsForOutput();
-        for (ByteBuffer segment : segments) {
-            byte[] segmentBytes = new byte[segment.remaining()];
-            segment.get(segmentBytes);
-            baos.write(segmentBytes);
-        }
-        byte[] serializedCapnp = baos.toByteArray();
-        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024 * 5);
-        byteBuffer.put(serializedCapnp);
-        byteBuffer.flip();
-        MessageReader messageReader = Serialize.read(byteBuffer);
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        Serialize.write(new ArrayOutputStream(byteBuffer), messageBuilder);
+        byte[] serializedCapnp = byteBuffer.array();
+
+        MessageReader messageReader = Serialize.read(ByteBuffer.wrap(serializedCapnp));
         StockTradeCapnp.StockTrade.Reader stockTradeReader = messageReader.getRoot(StockTradeCapnp.StockTrade.factory);
         assertEquals(stockTrade.getPrice(), stockTradeReader.getPrice());
         assertEquals(stockTrade.getShares(), stockTradeReader.getShares());
