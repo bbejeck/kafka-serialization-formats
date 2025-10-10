@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.InvalidProtocolBufferException;
 import io.confluent.developer.Stock;
+import io.confluent.developer.StockTradeCapnp;
 import io.confluent.developer.TxnType;
 import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.proto.Exchange;
@@ -24,6 +25,10 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.fory.Fory;
 import org.apache.fory.config.Language;
+import org.capnproto.ArrayOutputStream;
+import org.capnproto.MessageBuilder;
+import org.capnproto.MessageReader;
+import org.capnproto.Serialize;
 import org.apache.kafka.common.serialization.ByteBufferSerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -227,6 +232,28 @@ public class SerializationBenchmarks {
             serializedTransaction = fury.serialize(transaction);
         }
     }
+
+    @State(Scope.Benchmark)
+    public static class CapnProtoState {
+        MessageBuilder messageBuilder;
+        byte[] serializedCapnp;
+
+        @Setup(Level.Trial)
+        public void setUp() throws IOException {
+            messageBuilder = new MessageBuilder();
+            StockTradeCapnp.StockTrade.Builder stockTrade = messageBuilder.initRoot(StockTradeCapnp.StockTrade.factory);
+            stockTrade.setPrice(100.00);
+            stockTrade.setShares(10_000);
+            stockTrade.setSymbol("CFLT");
+            stockTrade.setExchange(StockTradeCapnp.Exchange.NASDAQ);
+            stockTrade.setTxnType(StockTradeCapnp.TxnType.BUY);
+
+            ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+            Serialize.write(new ArrayOutputStream(byteBuffer), messageBuilder);
+            serializedCapnp = byteBuffer.array();
+        }
+    }
+
     @Benchmark
     public byte[] measureFurySerialization(FuryState furyState) {
         return furyState.fury.serialize(furyState.transaction);
@@ -321,4 +348,17 @@ public class SerializationBenchmarks {
         return state.kryoDeserializer.deserialize("topic", state.serializedStock);
     }
     
+    @Benchmark
+    public byte[] measureCapnProtoSerialization(CapnProtoState state) throws IOException {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        Serialize.write(new ArrayOutputStream(byteBuffer), state.messageBuilder);
+        return byteBuffer.array();
+    }
+
+    @Benchmark
+    public StockTradeCapnp.StockTrade.Reader measureCapnProtoDeserialization(CapnProtoState state) throws IOException {
+        MessageReader messageReader = Serialize.read(ByteBuffer.wrap(state.serializedCapnp));
+        return messageReader.getRoot(StockTradeCapnp.StockTrade.factory);
+    }
+
 }
