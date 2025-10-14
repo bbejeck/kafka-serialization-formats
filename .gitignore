@@ -12,4 +12,9 @@ build/
 generated-sbe/
 generated-capnp/
 capnpc-java
+flamegraph/
+*SerializationBenchmarks*/
+*log*
+benchmark-results.json
+config.properties
 
