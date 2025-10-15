@@ -16,5 +16,6 @@ flamegraph/
 *SerializationBenchmarks*/
 *log*
 benchmark-results.json
+benchmark-results.html
 config.properties
 
