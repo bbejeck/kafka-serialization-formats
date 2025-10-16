@@ -257,7 +257,7 @@ public class BenchmarkHtmlGenerator {
                 data.score = primaryMetric.path("score").asDouble();
                 data.scoreError = primaryMetric.path("scoreError").asDouble();
                 data.scoreUnit = primaryMetric.path("scoreUnit").asText();
-                data.samples = primaryMetric.path("scorePercentiles").size() > 0 ?
+                data.samples = !primaryMetric.path("scorePercentiles").isEmpty() ?
                         primaryMetric.path("scorePercentiles").size() :
                         benchmark.path("measurementIterations").asInt(0);
 

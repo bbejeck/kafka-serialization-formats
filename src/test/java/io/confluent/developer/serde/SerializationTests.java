@@ -1,7 +1,10 @@
 package io.confluent.developer.serde;
 
-import baseline.*;
-import com.esotericsoftware.kryo.Kryo;
+import baseline.Exchange;
+import baseline.MessageHeaderEncoder;
+import baseline.StockTradeDecoder;
+import baseline.StockTradeEncoder;
+import baseline.TxnType;
 import io.confluent.developer.Stock;
 import io.confluent.developer.StockTradeCapnp;
 import io.confluent.developer.avro.StockAvro;
@@ -10,20 +13,15 @@ import io.confluent.developer.supplier.SbeRecordSupplier;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.capnproto.ArrayInputStream;
 import org.capnproto.ArrayOutputStream;
 import org.capnproto.MessageBuilder;
 import org.capnproto.MessageReader;
 import org.capnproto.Serialize;
-import org.capnproto.SerializePacked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.Writer;
 import java.nio.ByteBuffer;
-import java.nio.channels.WritableByteChannel;
 import java.util.HashMap;
 import java.util.Map;
 
