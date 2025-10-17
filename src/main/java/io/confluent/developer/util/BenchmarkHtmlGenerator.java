@@ -52,22 +52,6 @@ public class BenchmarkHtmlGenerator {
     private static String generateHtml(JsonNode rootNode) {
         StringBuilder html = new StringBuilder();
 
-        html.append("<!DOCTYPE html>\n");
-        html.append("<html lang=\"en\">\n");
-        html.append("<head>\n");
-        html.append("    <meta charset=\"UTF-8\">\n");
-        html.append("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
-        html.append("    <title>Benchmark Results Report</title>\n");
-        html.append(getCssStyles());
-        html.append(getJavaScript());
-        html.append("</head>\n");
-        html.append("<body>\n");
-        html.append("    <div class=\"container\">\n");
-        html.append("        <header>\n");
-        html.append("            <h1>📊 Benchmark Results Report</h1>\n");
-        html.append("            <p class=\"timestamp\">Generated: " + new Date() + "</p>\n");
-        html.append("        </header>\n");
-
         // Parse benchmarks and separate by mode and operation type
         List<BenchmarkData> allBenchmarks = parseBenchmarks(rootNode);
         List<BenchmarkData> throughputSerialize = new ArrayList<>();
@@ -102,14 +86,34 @@ public class BenchmarkHtmlGenerator {
         int totalThroughput = throughputSerialize.size() + throughputDeserialize.size();
         int totalAvgTime = avgTimeSerialize.size() + avgTimeDeserialize.size();
 
+        // NOW generate HTML with processed data
+        html.append("<!DOCTYPE html>\n");
+        html.append("<html lang=\"en\">\n");
+        html.append("<head>\n");
+        html.append("    <meta charset=\"UTF-8\">\n");
+        html.append("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+        html.append("    <title>Benchmark Results Report</title>\n");
+        html.append("    <script src=\"https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js\"></script>\n");
+        html.append(getCssStyles());
+        html.append(getJavaScript(throughputSerialize, throughputDeserialize, avgTimeSerialize, avgTimeDeserialize));
+        html.append("</head>\n");
+        html.append("<body>\n");
+        html.append("    <div class=\"container\">\n");
+        html.append("        <header>\n");
+        html.append("            <h1>📊 Benchmark Results Report</h1>\n");
+        html.append("            <p class=\"timestamp\">Generated: " + new Date() + "</p>\n");
+        html.append("        </header>\n");
+
         // Summary statistics
         html.append(generateSummary(rootNode, totalThroughput, totalAvgTime));
 
         // Tabs section
         html.append("        <div class=\"tabs-container\">\n");
         html.append("            <div class=\"tabs\">\n");
-        html.append("                <button class=\"tab-button active\" onclick=\"switchTab('throughput')\">⚡ Throughput (").append(totalThroughput).append(")</button>\n");
-        html.append("                <button class=\"tab-button\" onclick=\"switchTab('avgtime')\">⏱️ Average Time (").append(totalAvgTime).append(")</button>\n");
+        html.append("                <button class=\"tab-button active\" onclick=\"switchTab('throughput')\">⚡ Throughput Tables (").append(totalThroughput).append(")</button>\n");
+        html.append("                <button class=\"tab-button\" onclick=\"switchTab('throughput-charts')\">📊 Throughput Charts</button>\n");
+        html.append("                <button class=\"tab-button\" onclick=\"switchTab('avgtime')\">⏱️ Avg Time Tables (").append(totalAvgTime).append(")</button>\n");
+        html.append("                <button class=\"tab-button\" onclick=\"switchTab('avgtime-charts')\">📈 Avg Time Charts</button>\n");
         html.append("            </div>\n");
 
         // Throughput tab content
@@ -120,6 +124,34 @@ public class BenchmarkHtmlGenerator {
         // Average Time tab content
         html.append("            <div id=\"avgtime\" class=\"tab-content\">\n");
         html.append(generateGroupedTableHtml(avgTimeSerialize, avgTimeDeserialize, "Average Time Results", "Lower is Better (Faster)"));
+        html.append("            </div>\n");
+
+        // Throughput Charts tab
+        html.append("            <div id=\"throughput-charts\" class=\"tab-content\">\n");
+        html.append("                <div class=\"chart-container\">\n");
+        html.append("                    <h2>Throughput - Serialization</h2>\n");
+        html.append("                    <p class=\"subtitle\">Higher is Better (ops/time)</p>\n");
+        html.append("                    <canvas id=\"throughputSerChart\"></canvas>\n");
+        html.append("                </div>\n");
+        html.append("                <div class=\"chart-container\">\n");
+        html.append("                    <h2>Throughput - Deserialization</h2>\n");
+        html.append("                    <p class=\"subtitle\">Higher is Better (ops/time)</p>\n");
+        html.append("                    <canvas id=\"throughputDeserChart\"></canvas>\n");
+        html.append("                </div>\n");
+        html.append("            </div>\n");
+
+        // Average Time Charts tab
+        html.append("            <div id=\"avgtime-charts\" class=\"tab-content\">\n");
+        html.append("                <div class=\"chart-container\">\n");
+        html.append("                    <h2>Average Time - Serialization</h2>\n");
+        html.append("                    <p class=\"subtitle\">Lower is Better (time/op)</p>\n");
+        html.append("                    <canvas id=\"avgtimeSerChart\"></canvas>\n");
+        html.append("                </div>\n");
+        html.append("                <div class=\"chart-container\">\n");
+        html.append("                    <h2>Average Time - Deserialization</h2>\n");
+        html.append("                    <p class=\"subtitle\">Lower is Better (time/op)</p>\n");
+        html.append("                    <canvas id=\"avgtimeDeserChart\"></canvas>\n");
+        html.append("                </div>\n");
         html.append("            </div>\n");
 
         html.append("        </div>\n");
@@ -463,6 +495,19 @@ public class BenchmarkHtmlGenerator {
                     margin-bottom: 40px;
                 }
                 
+                .chart-container {
+                    margin-bottom: 60px;
+                    padding: 20px;
+                    background: white;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                }
+
+                .chart-container canvas {
+                    height: 500px !important;
+                    max-height: 800px;
+                }
+
                 .no-results {
                     padding: 40px;
                     text-align: center;
@@ -656,30 +701,117 @@ public class BenchmarkHtmlGenerator {
             """;
     }
 
-    private static String getJavaScript() {
-        return """
-            <script>
-                function switchTab(tabName) {
-                    // Hide all tab contents
-                    const tabContents = document.querySelectorAll('.tab-content');
-                    tabContents.forEach(content => {
-                        content.classList.remove('active');
-                    });
-                    
-                    // Remove active class from all buttons
-                    const tabButtons = document.querySelectorAll('.tab-button');
-                    tabButtons.forEach(button => {
-                        button.classList.remove('active');
-                    });
-                    
-                    // Show selected tab content
-                    document.getElementById(tabName).classList.add('active');
-                    
-                    // Add active class to clicked button
-                    event.target.classList.add('active');
-                }
-            </script>
-            """;
+    private static String getJavaScript(List<BenchmarkData> throughputSer, 
+                                        List<BenchmarkData> throughputDeser,
+                                        List<BenchmarkData> avgtimeSer, 
+                                        List<BenchmarkData> avgtimeDeser) {
+        StringBuilder js = new StringBuilder();
+        js.append("<script>\n");
+
+        // Generate chart data
+        js.append("const chartData = {\n");
+        js.append("    throughputSer: ").append(generateChartData(throughputSer)).append(",\n");
+        js.append("    throughputDeser: ").append(generateChartData(throughputDeser)).append(",\n");
+        js.append("    avgtimeSer: ").append(generateChartData(avgtimeSer)).append(",\n");
+        js.append("    avgtimeDeser: ").append(generateChartData(avgtimeDeser)).append("\n");
+        js.append("};\n\n");
+
+        // Tab switching function
+        js.append("function switchTab(tabName) {\n");
+        js.append("    const tabContents = document.querySelectorAll('.tab-content');\n");
+        js.append("    tabContents.forEach(content => {\n");
+        js.append("        content.classList.remove('active');\n");
+        js.append("    });\n");
+        js.append("    const tabButtons = document.querySelectorAll('.tab-button');\n");
+        js.append("    tabButtons.forEach(button => {\n");
+        js.append("        button.classList.remove('active');\n");
+        js.append("    });\n");
+        js.append("    document.getElementById(tabName).classList.add('active');\n");
+        js.append("    event.target.classList.add('active');\n");
+        js.append("}\n\n");
+
+        // Chart creation function
+        js.append("function createChart(canvasId, data, isHigherBetter) {\n");
+        js.append("    const ctx = document.getElementById(canvasId).getContext('2d');\n");
+        js.append("    return new Chart(ctx, {\n");
+        js.append("        type: 'bar',\n");
+        js.append("        data: {\n");
+        js.append("            labels: data.labels,\n");
+        js.append("            datasets: [{\n");
+        js.append("                label: 'Score',\n");
+        js.append("                data: data.scores,\n");
+        js.append("                backgroundColor: 'rgba(102, 126, 234, 0.6)',\n");
+        js.append("                borderColor: 'rgba(102, 126, 234, 1)',\n");
+        js.append("                borderWidth: 2\n");
+        js.append("            }]\n");
+        js.append("        },\n");
+        js.append("        options: {\n");
+        js.append("            indexAxis: 'y',\n");
+        js.append("            responsive: true,\n");
+        js.append("            maintainAspectRatio: false,\n");
+        js.append("            plugins: {\n");
+        js.append("                legend: { display: false },\n");
+        js.append("                tooltip: {\n");
+        js.append("                    callbacks: {\n");
+        js.append("                        label: function(context) {\n");
+        js.append("                            return 'Score: ' + context.parsed.x.toFixed(3);\n");
+        js.append("                        }\n");
+        js.append("                    }\n");
+        js.append("                }\n");
+        js.append("            },\n");
+        js.append("            scales: {\n");
+        js.append("                x: {\n");
+        js.append("                    beginAtZero: true,\n");
+        js.append("                    title: { display: true, text: data.unit }\n");
+        js.append("                },\n");
+        js.append("                y: {\n");
+        js.append("                    ticks: { autoSkip: false }\n");
+        js.append("                }\n");
+        js.append("            }\n");
+        js.append("        }\n");
+        js.append("    });\n");
+        js.append("}\n\n");
+
+        // Initialize charts on page load
+        js.append("window.addEventListener('load', function() {\n");
+        js.append("    createChart('throughputSerChart', chartData.throughputSer, true);\n");
+        js.append("    createChart('throughputDeserChart', chartData.throughputDeser, true);\n");
+        js.append("    createChart('avgtimeSerChart', chartData.avgtimeSer, false);\n");
+        js.append("    createChart('avgtimeDeserChart', chartData.avgtimeDeser, false);\n");
+        js.append("});\n");
+
+        js.append("</script>\n");
+
+        return js.toString();
+    }
+
+    private static String generateChartData(List<BenchmarkData> benchmarks) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        json.append("        labels: [");
+
+        for (int i = 0; i < benchmarks.size(); i++) {
+            if (i > 0) json.append(", ");
+            json.append("'").append(escapeHtml(benchmarks.get(i).shortName)).append("'");
+        }
+
+        json.append("],\n");
+        json.append("        scores: [");
+
+        for (int i = 0; i < benchmarks.size(); i++) {
+            if (i > 0) json.append(", ");
+            json.append(benchmarks.get(i).score);
+        }
+
+        json.append("],\n");
+        json.append("        unit: '");
+        if (!benchmarks.isEmpty()) {
+            json.append(escapeHtml(benchmarks.get(0).scoreUnit));
+        }
+        json.append("'\n");
+        json.append("    }");
+
+        return json.toString();
     }
 
     private static String escapeHtml(String text) {

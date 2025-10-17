@@ -64,5 +64,12 @@ Each benchmark includes:
 - **Java 21+** 
 - **Gradle 9.x**
 - **8GB+ RAM recommended** for JMH benchmarks
+- **async-profiler** (optional, for flame graph generation)
 
-## Project Structure
+## Installing async-profiler
+
+async-profiler is a low-overhead sampling profiler for Java that can generate flame graphs for CPU and memory profiling [[5]](https://github.com/async-profiler/async-profiler).
+
+### macOS Installation
+
+1. Download the latest macOS release:
