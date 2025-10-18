@@ -72,7 +72,6 @@ Install the correct version for your OS [from the GitHub project](https://github
 4. set `envValue` to the path of the `lib` directory where you extracted the archive
 5. run: `./gradlew jmh` to run the benchmarks with async-profiler
 
-1. Download the latest macOS release:
 ### Cap'n Proto Support
 
 Cap'n Proto benchmarks are **optional** and will be automatically skipped if the `capnpc-java` compiler is not present in the project root.
