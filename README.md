@@ -55,21 +55,36 @@ The benchmarks measure:
 - **Throughput**: Operations per time unit
 
 Each benchmark includes:
-- 5 warmup iterations
-- 5 measurement iterations
+- 3 warmup iterations
+- 3 measurement iterations
 - 1 JVM fork
 
-## Prerequisites
 
-- **Java 21+** 
-- **Gradle 9.x**
-- **8GB+ RAM recommended** for JMH benchmarks
-- **async-profiler** (optional, for flame graph generation)
+
+## Optional Components
 
 ## Installing async-profiler
-
-async-profiler is a low-overhead sampling profiler for Java that can generate flame graphs for CPU and memory profiling [[5]](https://github.com/async-profiler/async-profiler).
-
-### macOS Installation
+async-profiler is a low-overhead sampling profiler for Java that can generate flame graphs for CPU and memory profiling. 
+Install the correct version for your OS [from the GitHub project](https://github.com/async-profiler/async-profiler).
+1. unzip the archive
+2. save `config.properties.original` as `config.properties`
+3. set `envName` to `DYLD_LIBRARY_PATH`
+4. set `envValue` to the path of the `lib` directory where you extracted the archive
+5. run: `./gradlew jmh` to run the benchmarks with async-profiler
 
 1. Download the latest macOS release:
+### Cap'n Proto Support
+
+Cap'n Proto benchmarks are **optional** and will be automatically skipped if the `capnpc-java` compiler is not present in the project root.
+
+**To enable Cap'n Proto benchmarks:**
+
+1. Install Captain Proto (`brew install capnp` on macOS)
+2. Clone `capnpc-java` from https://github.com/capnproto/capnproto-java
+3. Run `make` and place the `capnpc-java` executable in the project root directory
+4. Run `capnp  compile -o ./capnpc-java:./build src/main/resources/capnp-schema/stock-schema.capnp --src-prefix=src/main/resources/capnp-schema` from the project root directory
+
+**To disable Cap'n Proto benchmarks:**
+
+Simply don't install `capnpc-java`. The build will skip Cap'n Proto code generation and the related benchmarks will be excluded automatically.
+

@@ -47,6 +47,7 @@ import org.openjdk.jmh.profile.AsyncProfiler;
 import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
@@ -477,12 +478,23 @@ public class SerializationBenchmarks {
 
     public static void main(String[] args) {
         try {
-            Options opt = new OptionsBuilder()
+            // Check if profiling is enabled via command-line argument
+            boolean enableProfiling = args.length > 0 && "true".equalsIgnoreCase(args[0]);
+
+            ChainedOptionsBuilder optBuilder = new OptionsBuilder()
                     .include(SerializationBenchmarks.class.getSimpleName())
-                    .addProfiler(AsyncProfiler.class, "output=flamegraph;simple=true")
                     .result("benchmark-results.json")
-                    .resultFormat(ResultFormatType.JSON)
-                    .build();
+                    .resultFormat(ResultFormatType.JSON);
+
+            // Conditionally add async-profiler
+            if (enableProfiling) {
+                System.out.println("✓ async-profiler ENABLED - flame graphs will be generated");
+                optBuilder.addProfiler(AsyncProfiler.class, "output=flamegraph;simple=true");
+            } else {
+                System.out.println("✗ async-profiler DISABLED - run with argument 'true' to enable profiling");
+            }
+
+            Options opt = optBuilder.build();
             new Runner(opt).run();
         } catch (RunnerException e) {
             throw new RuntimeException(e);

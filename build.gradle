@@ -74,10 +74,28 @@ tasks.register('sbe', JavaExec) {
 
 tasks.register('capnp', Exec) {
     group = "Execution"
-    description = "Runs Cap'n Proto compiler to generate Java code from schemas"
+    description = "Runs Cap'n Proto compiler to generate Java code from schemas (skipped if capnpc-java not found)"
+
+    // Check if capnpc-java exists
+    onlyIf {
+        def capnpcJavaPath = './capnpc-java'
+        def capnpcJavaFile = file(capnpcJavaPath)
+        if (capnpcJavaFile.exists()) {
+            logger.info("Found capnpc-java at: ${capnpcJavaFile.absolutePath}")
+            return true
+        } else {
+            logger.warn("Skipping capnp task - capnpc-java not found at: ${capnpcJavaFile.absolutePath}")
+            logger.warn("To enable Cap'n Proto support, download capnpc-java from https://github.com/capnproto/capnproto-java")
+            return false
+        }
+    }
+
     commandLine 'capnp', 'compile', '-o', './capnpc-java:./generated-capnp',
             'src/main/resources/capnp-schema/stock-schema.capnp',
             '--src-prefix=src/main/resources/capnp-schema'
+
+    // Don't fail build if capnp command not found
+    ignoreExitValue = true
 }
 
 tasks.register('jmh', JavaExec) {
@@ -85,8 +103,21 @@ tasks.register('jmh', JavaExec) {
     group = "benchmark"
     description = "Run JMH benchmarks"
     classpath = files(shadowJar.archiveFile)
-    environment configProps.envName, configProps.envValue
+
+    def envName = configProps.envName?.trim()
+    def envValue = configProps.envValue?.trim()
+    def runProfiling = false
+    if (envName && envValue) {
+        environment envName, envValue
+        logger.info("Setting environment: ${envName}=${envValue}")
+        runProfiling = true
+    } else {
+        logger.warn("Skipping environment setup - envName or envValue not defined in config.properties")
+    }
+
     mainClass = "io.confluent.developer.jmh.SerializationBenchmarks"
+    args = [runProfiling]
+
     jvmArgs = [
             "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED",
             "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
@@ -95,6 +126,7 @@ tasks.register('jmh', JavaExec) {
             "-Xms8g",
             "-Xmx8g"
     ]
+
 }
 
 clean {
