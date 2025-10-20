@@ -256,7 +256,11 @@ public class SerializationBenchmarks {
 
         @Setup(Level.Trial)
         public void setUp() {
-            fury = Fory.builder().withLanguage(Language.JAVA).requireClassRegistration(true).build();
+            fury = Fory.builder().withLanguage(Language.JAVA)
+                    .withCodegen(true)
+                    .withNumberCompressed(true)
+                    .withRefTracking(true)
+                    .requireClassRegistration(true).build();
             transaction = new Stock(100.00, 10_000, "CFLT", "NASDAQ", TxnType.BUY);
             fury.register(Stock.class);
             fury.register(TxnType.class);

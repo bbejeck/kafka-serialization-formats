@@ -101,22 +101,23 @@ tasks.register('capnp', Exec) {
 tasks.register('jmh', JavaExec) {
     dependsOn shadowJar
     group = "benchmark"
-    description = "Run JMH benchmarks"
+    description = "Run JMH benchmarks (use -PenableProfiling=true to enable async-profiler)"
     classpath = files(shadowJar.archiveFile)
 
     def envName = configProps.envName?.trim()
     def envValue = configProps.envValue?.trim()
-    def runProfiling = false
-    if (envName && envValue) {
+    def enableProfiling = project.findProperty('enableProfiling') ?: 'false'
+
+    // Only set environment if envName and envValue are defined and profiling is enabled
+    if (enableProfiling == 'true' && envName && envValue) {
         environment envName, envValue
         logger.info("Setting environment: ${envName}=${envValue}")
-        runProfiling = true
-    } else {
-        logger.warn("Skipping environment setup - envName or envValue not defined in config.properties")
+    } else if (enableProfiling == 'true') {
+        logger.warn("Profiling enabled but envName or envValue not defined in config.properties")
     }
 
     mainClass = "io.confluent.developer.jmh.SerializationBenchmarks"
-    args = [runProfiling]
+    args = [enableProfiling]
 
     jvmArgs = [
             "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED",
@@ -127,6 +128,61 @@ tasks.register('jmh', JavaExec) {
             "-Xmx8g"
     ]
 
+    doFirst {
+        if (enableProfiling == 'true') {
+            logger.lifecycle("Running benchmarks WITH async-profiler enabled")
+        } else {
+            logger.lifecycle("Running benchmarks WITHOUT async-profiler (use -PenableProfiling=true to enable)")
+        }
+    }
+}
+
+tasks.register('generateHtmlReport', JavaExec) {
+    group = "benchmark"
+    description = "Generate HTML report from benchmark results (use -PjsonFile=<path> and -PhtmlFile=<path> to customize)"
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = "io.confluent.developer.util.BenchmarkHtmlGenerator"
+
+    // Allow customization of input/output files
+    def jsonFile = project.findProperty('jsonFile') ?: 'benchmark-results.json'
+    def htmlFile = project.findProperty('htmlFile') ?: 'benchmark-results.html'
+
+    args = [jsonFile, htmlFile]
+
+    doFirst {
+        def jsonPath = file(jsonFile)
+        if (!jsonPath.exists()) {
+            throw new GradleException("Benchmark results file not found: ${jsonPath.absolutePath}\n" +
+                    "Please run './gradlew jmh' first to generate benchmark results.")
+        }
+        logger.lifecycle("Generating HTML report from: ${jsonPath.absolutePath}")
+        logger.lifecycle("Output will be written to: ${file(htmlFile).absolutePath}")
+    }
+
+    doLast {
+        def outputFile = file(htmlFile)
+        if (outputFile.exists()) {
+            logger.lifecycle("✓ HTML report generated successfully!")
+            logger.lifecycle("  Open: ${outputFile.absolutePath}")
+        }
+    }
+}
+
+tasks.register('benchmarkAll') {
+    dependsOn jmh, generateHtmlReport
+    group = "benchmark"
+    description = "Run JMH benchmarks and generate HTML report"
+
+    // Ensure jmh runs before generateHtmlReport
+    generateHtmlReport.mustRunAfter jmh
+
+    doLast {
+        logger.lifecycle("=" * 60)
+        logger.lifecycle("Benchmark suite completed!")
+        logger.lifecycle("Results: benchmark-results.json")
+        logger.lifecycle("Report:  benchmark-results.html")
+        logger.lifecycle("=" * 60)
+    }
 }
 
 clean {

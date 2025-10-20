@@ -18,4 +18,5 @@ flamegraph/
 benchmark-results.json
 benchmark-results.html
 config.properties
+out/
 
