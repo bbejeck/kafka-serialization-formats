@@ -124,6 +124,8 @@ tasks.register('jmh', JavaExec) {
             "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
             "--add-opens=java.base/java.nio=ALL-UNNAMED",
             "-XX:+UseG1GC",
+            "-XX:+UnlockDiagnosticVMOptions",
+            "-XX:+DebugNonSafepoints",
             "-Xms8g",
             "-Xmx8g"
     ]
