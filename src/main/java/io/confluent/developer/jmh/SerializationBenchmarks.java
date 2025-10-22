@@ -142,7 +142,8 @@ public class SerializationBenchmarks {
             protobufSerializer.configure(config, false);
             config.put(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_VALUE_TYPE, StockProto.class);
             protobufDeserializer.configure(config, false);
-            serializedStock = protobufSerializer.serialize("dummy", stockProto);
+            serializedStock = protobufSerializer.serialize("topic", stockProto);
+            protobufDeserializer.deserialize("topic", serializedStock);
             serializationBuffer = new byte[1024];
         }
 

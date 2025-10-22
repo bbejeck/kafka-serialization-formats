@@ -104,16 +104,15 @@ tasks.register('jmh', JavaExec) {
     description = "Run JMH benchmarks (use -PenableProfiling=true to enable async-profiler)"
     classpath = files(shadowJar.archiveFile)
 
-    def envName = configProps.envName?.trim()
-    def envValue = configProps.envValue?.trim()
-    def enableProfiling = project.findProperty('enableProfiling') ?: 'false'
+    def asyncProfilerLibName = configProps.envName?.trim()
+    def asyncProfilerLibLocation = configProps.envValue?.trim()
+    def enableProfiling = false
 
-    // Only set environment if envName and envValue are defined and profiling is enabled
-    if (enableProfiling == 'true' && envName && envValue) {
-        environment envName, envValue
-        logger.info("Setting environment: ${envName}=${envValue}")
-    } else if (enableProfiling == 'true') {
-        logger.warn("Profiling enabled but envName or envValue not defined in config.properties")
+    // Only set environment if asyncProfilerLibName and asyncProfilerLibLocation are defined
+    if (asyncProfilerLibName && asyncProfilerLibLocation) {
+        enableProfiling = true
+        environment asyncProfilerLibName, asyncProfilerLibLocation
+        logger.info("Setting environment: ${asyncProfilerLibName}=${asyncProfilerLibLocation}")
     }
 
     mainClass = "io.confluent.developer.jmh.SerializationBenchmarks"
@@ -131,7 +130,7 @@ tasks.register('jmh', JavaExec) {
     ]
 
     doFirst {
-        if (enableProfiling == 'true') {
+        if (enableProfiling == true) {
             logger.lifecycle("Running benchmarks WITH async-profiler enabled")
         } else {
             logger.lifecycle("Running benchmarks WITHOUT async-profiler (use -PenableProfiling=true to enable)")
