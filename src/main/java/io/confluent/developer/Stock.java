@@ -8,6 +8,6 @@ package io.confluent.developer;
 public record Stock(double price,
                     long shares,
                     String symbol,
-                    String exchange,
+                    Exchange exchange,
                     TxnType type) {
 }

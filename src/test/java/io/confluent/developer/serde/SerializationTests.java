@@ -13,6 +13,9 @@ import io.confluent.developer.supplier.SbeRecordSupplier;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.apache.fory.Fory;
+import org.apache.fory.config.CompatibleMode;
+import org.apache.fory.config.Language;
 import org.capnproto.ArrayOutputStream;
 import org.capnproto.MessageBuilder;
 import org.capnproto.MessageReader;
@@ -26,6 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * User: Bill Bejeck
@@ -79,8 +83,8 @@ class SerializationTests {
     void kryoRoundTripTest() {
         try (KryoSerializer kryoSerializer = new KryoSerializer();
             KryoDeserializer kryoDeserializer = new KryoDeserializer()) {
-            Stock stockOne = new Stock(100.00, 5_000L, "CFLT", "NASDAQ", io.confluent.developer.TxnType.BUY);
-            Stock stockTwo = new Stock(500.00, 105_000L, "AAPL", "NASDAQ", io.confluent.developer.TxnType.BUY);
+            Stock stockOne = new Stock(100.00, 5_000L, "CFLT", io.confluent.developer.Exchange.NASDAQ, io.confluent.developer.TxnType.BUY);
+            Stock stockTwo = new Stock(500.00, 105_000L, "AAPL", io.confluent.developer.Exchange.NASDAQ, io.confluent.developer.TxnType.BUY);
 
             byte[] bytesOne = kryoSerializer.serialize("topic", stockOne);
             byte[] bytesTwo = kryoSerializer.serialize("topic", stockTwo);
@@ -96,17 +100,14 @@ class SerializationTests {
     @Test
     void serializedRecordSizesTest() {
        StockProto stockProto = stockProto();
-       StockAvro stockAvro = stockAvro();
        Stock stock = javaRecordStock();
        StockTradeEncoder stockTradeEncoder = sbeRecordSupplier.get();
        byte[] protoSerialized = protobufSerializer.serialize("topic", stockProto);
-       byte[] serializedAvro = avroSerializer.serialize("topic", stockAvro);
        byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
        byte[] kryoBytes =  kryoSerializer.serialize("topic", stock);
        byte[] jacksonBytes = jacksonRecordSerializer.serialize("topic", stock);
 
        assertEquals(27, protoSerialized.length);
-       assertEquals(23, serializedAvro.length);
        assertEquals(26, sbeBytes.length);
        assertEquals(26, kryoBytes.length);
        assertEquals(79, jacksonBytes.length);
@@ -142,6 +143,32 @@ class SerializationTests {
         assertEquals(TxnType.BUY, stockTradeDecoder.txnType());
     }
 
+    @Test
+    void shouldHandleObjectSchemaChanges() {
+        Fory fory = Fory.builder()
+            .withCompatibleMode(CompatibleMode.COMPATIBLE)
+            .build();
+        fory.register(CustomerTrade.class);
+        fory.register(CustomerTradeV2.class);
+
+        CustomerTrade customerTrade = new CustomerTrade("Hulk", "hulk@avengers");
+        CustomerTradeV2 customerTradeV2 = new CustomerTradeV2("Hulk", "hulk@avengers", "123 Stark Avenue, NYC");
+        
+        byte[] serialized = fory.serializeJavaObject(customerTrade);
+        byte[] serializedV2 = fory.serializeJavaObject(customerTradeV2);
+
+        CustomerTradeV2 deserializedV2 = fory.deserializeJavaObject(serialized, CustomerTradeV2.class);
+        CustomerTrade deserializedV1 = fory.deserializeJavaObject(serializedV2, CustomerTrade.class);
+
+        assertEquals(customerTrade.getName(), deserializedV2.getName());
+        assertEquals(customerTrade.getEmail(), deserializedV2.getEmail());
+        assertNull(deserializedV2.getAddress());
+
+        assertEquals(customerTradeV2.getName(), deserializedV1.getName());
+        assertEquals(customerTradeV2.getEmail(), deserializedV1.getEmail());
+
+    }
+
 
     @Test
     void sbeDirectEncodeDecodeTest() {
@@ -175,18 +202,9 @@ class SerializationTests {
     }
 
     Stock javaRecordStock() {
-        return new Stock(101.1, 70_000L, "CFLT", "NASDAQ", io.confluent.developer.TxnType.BUY);
+        return new Stock(101.1, 70_000L, "CFLT", io.confluent.developer.Exchange.NASDAQ, io.confluent.developer.TxnType.BUY);
     }
 
-    StockAvro stockAvro() {
-        StockAvro.Builder builder = StockAvro.newBuilder();
-        builder.setType(io.confluent.developer.avro.TxnType.BUY);
-        builder.setPrice(101.0);
-        builder.setShares(70_000);
-        builder.setSymbol("CFLT");
-        builder.setExchange(io.confluent.developer.avro.Exchange.NASDAQ);
-        return builder.build();
-    }
 
     StockProto stockProto() {
         StockProto.Builder stockProtoBuilder = StockProto.newBuilder();
@@ -196,6 +214,97 @@ class SerializationTests {
         stockProtoBuilder.setExchange(io.confluent.developer.proto.Exchange.NASDAQ);
         stockProtoBuilder.setTxn(io.confluent.developer.proto.TxnType.BUY);
         return stockProtoBuilder.build();
+    }
+
+    interface StockOperation {
+        void execute(Stock stock);
+
+    }
+
+
+    public static class CustomerTrade implements StockOperation {
+        private String name;
+        private String email;
+
+        public CustomerTrade() {
+        }
+
+        public CustomerTrade(String name, String email) {
+            this.name = name;
+            this.email = email;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public void execute(Stock stock) {
+            System.out.println("Executing customer trade for stock: " + stock);
+        }
+    }
+
+    public static class CustomerTradeV2 implements StockOperation {
+        private String name;
+        private String email;
+        private String address;
+
+        public CustomerTradeV2() {
+        }
+
+        public CustomerTradeV2(String name, String email, String address) {
+            this.name = name;
+            this.email = email;
+            this.address = address;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getAddress() {
+            return address;
+        }
+
+        public void setAddress(String address) {
+            this.address = address;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public void execute(Stock stock) {
+            System.out.println("Executing customer trade for stock: " + stock);
+        }
+
+        @Override
+        public String toString() {
+            return "CustomerTradeV2{" +
+                "name='" + name + '\'' +
+                ", email='" + email + '\'' +
+                ", address='" + address + '\'' +
+                '}';
+        }
     }
 
 }

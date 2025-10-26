@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    xmlns:xi="http://www.w3.org/2001/XInclude"
-                   package="baseline"
+                   package="group_example"
                    id="1"
                    version="0"
                    semanticVersion="5.2"
-                   description="Example base schema which can be extended."
+                   description="Example schema with a group"
                    byteOrder="littleEndian">
 
     <xi:include href="common-types.xml"/>
@@ -20,11 +20,18 @@
             <validValue name="NYSE">1</validValue>
         </enum>
     </types>
-    <sbe:message name="StockTrade" id="1" description="Describes a stock trade">
+
+    <sbe:message name="StockTrade" id="1" description="Stock trade with price history">
         <field name="price" id="1" type="double"/>
         <field name="shares" id="2" type="uint32"/>
         <field name="symbol" id="3" type="Symbol"/>
         <field name="exchange" id="4" type="Exchange"/>
         <field name="txnType" id="5" type="TxnType"/>
+        <group name="priceHistory" id="6" dimensionType="groupSizeEncoding" description="Historical prices for this stock">
+            <field name="timestamp" id="7" type="uint64" description="Unix timestamp in milliseconds"/>
+            <field name="historicalPrice" id="8" type="double" description="Historical price at timestamp"/>
+            <field name="volume" id="9" type="uint32" description="Trading volume at that time"/>
+        </group>
+
     </sbe:message>
 </sbe:messageSchema>

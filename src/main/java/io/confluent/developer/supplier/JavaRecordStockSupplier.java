@@ -1,5 +1,6 @@
 package io.confluent.developer.supplier;
 
+import io.confluent.developer.Exchange;
 import io.confluent.developer.Stock;
 import io.confluent.developer.TxnType;
 import net.datafaker.Faker;
@@ -20,7 +21,7 @@ public class JavaRecordStockSupplier implements Supplier<Stock> {
         return new Stock(faker.number().randomDouble(2, 1, 200),
                         faker.number().numberBetween(100, 10_000),
                         faker.stock().nsdqSymbol(),
-                        faker.stock().exchanges(),
+                        Exchange.values()[faker.number().numberBetween(0, 2)],
                         TxnType.values()[faker.number().numberBetween(0, 2)]);
     }
 }

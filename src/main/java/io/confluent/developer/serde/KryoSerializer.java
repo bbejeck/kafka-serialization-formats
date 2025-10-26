@@ -2,6 +2,7 @@ package io.confluent.developer.serde;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Output;
+import io.confluent.developer.Exchange;
 import io.confluent.developer.Stock;
 import io.confluent.developer.TxnType;
 import org.apache.kafka.common.serialization.Serializer;
@@ -19,6 +20,7 @@ public class KryoSerializer implements Serializer<Stock>{
     public KryoSerializer() {
         kryo.register(Stock.class);
         kryo.register(TxnType.class);
+        kryo.register(Exchange.class);
     }
 
     @Override
