@@ -7,8 +7,6 @@ import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.serde.JacksonRecordDeserializer;
 import io.confluent.developer.serde.SbeDeserializer;
 import io.confluent.developer.util.Utils;
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import org.apache.kafka.clients.consumer.*;
@@ -52,13 +50,6 @@ public class ConsumerRunner {
                 props.put(KafkaProtobufDeserializerConfig.SPECIFIC_PROTOBUF_VALUE_TYPE, StockProto.class);
                 props.put(ConsumerConfig.GROUP_ID_CONFIG, "proto-group");
                 consumeRecords(numRecords, props, "proto-input");
-            }
-            case AVRO -> {
-                props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
-                props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_VALUE_TYPE_CONFIG, StockAvro.class);
-                props.put(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true);
-                props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-group");
-                consumeRecords(numRecords, props, "avro-input");
             }
             case SBE -> {
                 props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, SbeDeserializer.class);

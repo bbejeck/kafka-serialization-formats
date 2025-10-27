@@ -2,13 +2,11 @@ package io.confluent.developer.producer;
 
 import io.confluent.developer.serde.JacksonRecordSerializer;
 import io.confluent.developer.serde.SbeSerializer;
-import io.confluent.developer.supplier.AvroStockSupplier;
 import io.confluent.developer.supplier.JavaRecordStockSupplier;
 import io.confluent.developer.supplier.ProtoStockSupplier;
 import io.confluent.developer.supplier.SbeRecordSupplier;
 import io.confluent.developer.util.Utils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -30,7 +28,6 @@ public class ProducerRunner {
 
     private static final String RECORD = "record";
     private static final String PROTO = "proto";
-    private static final String AVRO = "avro";
     private static final String SBE = "sbe";
 
     public static void main(String[] args) {
@@ -52,11 +49,6 @@ public class ProducerRunner {
                 props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaProtobufSerializer.class);
                 props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, true);
                 produceRecords(numRecords, "proto-input", new ProtoStockSupplier(), props);
-            }
-            case AVRO -> {
-                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
-                props.put(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, true);
-                produceRecords(numRecords, "avro-input", new AvroStockSupplier(), props);
             }
             case SBE -> {
                 props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, SbeSerializer.class);

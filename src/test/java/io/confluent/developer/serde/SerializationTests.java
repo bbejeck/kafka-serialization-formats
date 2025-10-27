@@ -7,15 +7,12 @@ import baseline.StockTradeEncoder;
 import baseline.TxnType;
 import io.confluent.developer.Stock;
 import io.confluent.developer.StockTradeCapnp;
-import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.supplier.SbeRecordSupplier;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.fory.Fory;
 import org.apache.fory.config.CompatibleMode;
-import org.apache.fory.config.Language;
 import org.capnproto.ArrayOutputStream;
 import org.capnproto.MessageBuilder;
 import org.capnproto.MessageReader;
@@ -40,7 +37,6 @@ class SerializationTests {
 
     private final SbeRecordSupplier sbeRecordSupplier = new SbeRecordSupplier();
     private final KafkaProtobufSerializer<StockProto> protobufSerializer = new KafkaProtobufSerializer<>();
-    private final KafkaAvroSerializer avroSerializer = new KafkaAvroSerializer();
     private final SbeDeserializer sbeNonDirectDeserializer = new SbeDeserializer();
     private final SbeSerializer sbeSerializer = new SbeSerializer();
     private final JacksonRecordSerializer jacksonRecordSerializer = new JacksonRecordSerializer();
@@ -53,7 +49,6 @@ class SerializationTests {
         Map<String,Object> config = new HashMap<>();
         config.put("schema.registry.url", "mock://localhost:8081");
         protobufSerializer.configure(config, false);
-        avroSerializer.configure(config, false);
     }
 
     @Test

@@ -307,19 +307,20 @@ public class SerializationBenchmarks {
     @Benchmark
     public void measureSbeSerialization(SbeState state, Blackhole blackhole) {
         state.stockTradeEncoder.wrapAndApplyHeader(state.directUnsafeBuffer, 0, state.messageHeaderEncoder)
-                .price(100.00)
-                .shares(10_000)
-                .symbol("CFLT")
+                .price(PRICE)
+                .shares(SHARES)
+                .symbol(SYMBOL)
                 .exchange(baseline.Exchange.NASDAQ)
                 .txnType(baseline.TxnType.BUY);
-        
-        blackhole.consume(state.stockTradeEncoder.encodedLength());
+        byte[] results = new byte[state.stockTradeEncoder.limit()];
+        state.directUnsafeBuffer.getBytes(0, results);
+        blackhole.consume(results);
     }
 
     @Benchmark
     public void measureSbeDeserialization(SbeState state, Blackhole blackhole) {
         StockTradeDecoder result = state.sbeDeserializer.deserialize("topic", state.deserializationBytes);
-        blackhole.consume(result.encodedLength());
+        blackhole.consume(result);
     }
 
     // ==================== Kryo Benchmarks ====================
