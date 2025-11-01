@@ -6,16 +6,15 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.kafka.common.serialization.Deserializer;
 
 /**
- * This class is not thread safe as returns the same decoder instance
- * with each call. If working in a multi-threaded environment, use
- * {@link ThreadSafeSbeDeserializer} instead.
+ * This class is thread safe as it creates a new decoder instance
+ * with each call.
  */
-public class SbeDeserializer implements Deserializer<StockTradeDecoder> {
-    MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
-    StockTradeDecoder stockTradeDecoder = new StockTradeDecoder();
+public class ThreadSafeSbeDeserializer implements Deserializer<StockTradeDecoder> {
 
     @Override
     public StockTradeDecoder deserialize(String s, byte[] bytes) {
+        MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
+        StockTradeDecoder stockTradeDecoder = new StockTradeDecoder();
         UnsafeBuffer unsafeBuffer = new UnsafeBuffer(bytes);
         stockTradeDecoder.wrapAndApplyHeader(unsafeBuffer, 0, messageHeaderDecoder);
         return stockTradeDecoder;

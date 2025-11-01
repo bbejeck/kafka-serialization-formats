@@ -37,6 +37,9 @@ public class ProducerRunner {
         int numRecords = Integer.parseInt(args[1]);
         Properties props = Utils.getProperties();
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        props.put(ProducerConfig.BATCH_SIZE_CONFIG, 1048576);
+        props.put(ProducerConfig.LINGER_MS_CONFIG, 100);
+        props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 67108864);
         switch (messageType) {
             case JSON -> {
                 props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JacksonRecordSerializer.class);
@@ -72,8 +75,9 @@ public class ProducerRunner {
                     }
                 });
             }
+            producer.flush();
             Instant after = Instant.now();
-            System.out.printf("Producing records for [%s]Took %d milliseconds %n", type, after.toEpochMilli() - start.toEpochMilli());
+            System.out.printf("Producing records for [%s] Took %d milliseconds %n", type, after.toEpochMilli() - start.toEpochMilli());
         }
     }
 }

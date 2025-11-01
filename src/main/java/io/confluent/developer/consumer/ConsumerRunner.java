@@ -34,6 +34,12 @@ public class ConsumerRunner {
         Properties props = Utils.getProperties();
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10000);
+        props.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, 1048576);
+        props.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 500);
+        props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 10485760); // 10MB per partition
+        props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, 1048576);
+
         int numRecords = Integer.parseInt(args[1]);
 
         switch (messageType) {
@@ -72,6 +78,7 @@ public class ConsumerRunner {
             while (recordCount < numRecords) {
                 ConsumerRecords<byte[], Object> records = consumer.poll(Duration.ofMillis(100));
                 for (ConsumerRecord<byte[], Object> consumerRecord : records) {
+                    consumerRecord.value();
                      recordCount++;
 
                     }

@@ -166,7 +166,7 @@ class SerializationTests {
 
 
     @Test
-    void sbeDirectEncodeDecodeTest() {
+    void sbeSerializerDeserializerTest() {
         ByteBuffer directBuffer = ByteBuffer.allocateDirect(1024);
         StockTradeEncoder stockTradeEncoder = stockTradeEncoder(price, shares, directBuffer);
         byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
