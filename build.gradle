@@ -64,6 +64,8 @@ if (propertiesFile.exists()) {
 tasks.register('sbe', JavaExec) {
     systemProperty("sbe.output.dir", "generated-sbe")
     systemProperty("sbe.xinclude.aware", "true")
+    systemProperty("sbe.java.generate.dtos", "true")
+    //systemProperty("sbe.generate.precedence.checks", "true")
     group = "Execution"
     description = "Runs the SBE tool to generate code from schemas"
     classpath = configurations.runtimeClasspath
