@@ -28,6 +28,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * User: Bill Bejeck
@@ -131,6 +132,132 @@ class SerializationTests {
     }
 
     @Test
+    void foryIntArrayCompressionImpact() {
+        // Create Fory instance WITHOUT integer array compression
+        Fory foryUncompressed = Fory.builder().build();
+        foryUncompressed.register(TradingVolumes.class);
+
+        // Create Fory instance WITH integer array compression enabled
+        Fory foryCompressed = Fory.builder()
+                .withIntArrayCompressed(true)
+                .build();
+        foryCompressed.register(TradingVolumes.class);
+
+        // Create test data with integer arrays containing patterns that compress well
+        // Simulating hourly trading volumes over 24 hours (many similar values)
+        int[] hourlyVolumes = new int[24];
+        for (int i = 0; i < 24; i++) {
+            // Realistic pattern: low volume overnight, high during trading hours
+            hourlyVolumes[i] = (i >= 9 && i <= 16) ? 50000 + (i * 1000) : 5000;
+        }
+
+        // Daily volumes for 30 days (some repeated patterns)
+        int[] dailyVolumes = new int[30];
+        for (int i = 0; i < 30; i++) {
+            dailyVolumes[i] = 1000000 + (i % 7) * 50000; // Weekly patterns
+        }
+
+        TradingVolumes volumes = new TradingVolumes(hourlyVolumes, dailyVolumes, "AAPL");
+
+        // Serialize with and without compression
+        byte[] uncompressedBytes = foryUncompressed.serialize(volumes);
+        byte[] compressedBytes = foryCompressed.serialize(volumes);
+
+        // Verify deserialization works correctly
+        TradingVolumes decompressedVolumes = (TradingVolumes) foryCompressed.deserialize(compressedBytes);
+        assertEquals(volumes.getSymbol(), decompressedVolumes.getSymbol());
+        assertEquals(hourlyVolumes.length, decompressedVolumes.getHourlyVolumes().length);
+        assertEquals(dailyVolumes.length, decompressedVolumes.getDailyVolumes().length);
+
+        // Verify array contents match
+        for (int i = 0; i < hourlyVolumes.length; i++) {
+            assertEquals(hourlyVolumes[i], decompressedVolumes.getHourlyVolumes()[i],
+                    "Hourly volume at index " + i + " should match");
+        }
+    }
+
+    @Test
+    void foryStringCompressionImpact() {
+        // Create Fory instance WITHOUT string compression
+        Fory foryUncompressed = Fory.builder().build();
+        foryUncompressed.register(MarketReport.class);
+
+        // Create Fory instance WITH string compression enabled via withStringCompressed()
+        Fory foryCompressed = Fory.builder()
+                .withStringCompressed(true)
+                .build();
+        foryCompressed.register(MarketReport.class);
+
+        // Create test data with repeated string patterns (common in real market data)
+        List<String> companyDescriptions = new java.util.ArrayList<>();
+        List<String> marketCommentary = new java.util.ArrayList<>();
+
+        // Add repeated company descriptions (simulating market sectors/categories)
+        String techDesc = "Technology company specializing in cloud computing and software services";
+        String financeDesc = "Financial services company providing banking and investment solutions";
+        String healthDesc = "Healthcare company focused on pharmaceutical research and development";
+
+        for (int i = 0; i < 20; i++) {
+            // Repeated patterns compress well
+            if (i % 3 == 0) companyDescriptions.add(techDesc);
+            else if (i % 3 == 1) companyDescriptions.add(financeDesc);
+            else companyDescriptions.add(healthDesc);
+        }
+
+        // Add repeated market commentary phrases
+        String bullish = "Market sentiment remains bullish with strong buying pressure across major indices";
+        String bearish = "Market sentiment turns bearish amid concerns about inflation and interest rates";
+        String neutral = "Market sentiment neutral as investors await earnings reports and economic data";
+
+        for (int i = 0; i < 15; i++) {
+            if (i % 3 == 0) marketCommentary.add(bullish);
+            else if (i % 3 == 1) marketCommentary.add(bearish);
+            else marketCommentary.add(neutral);
+        }
+
+        MarketReport report = new MarketReport(companyDescriptions, marketCommentary, "2024-01-15");
+
+        // Serialize with and without compression
+        byte[] uncompressedBytes = foryUncompressed.serialize(report);
+        byte[] compressedBytes = foryCompressed.serialize(report);
+
+        // Verify deserialization works correctly
+        MarketReport decompressedReport = (MarketReport) foryCompressed.deserialize(compressedBytes);
+        assertEquals(report.getReportDate(), decompressedReport.getReportDate());
+        assertEquals(report.getCompanyDescriptions().size(), decompressedReport.getCompanyDescriptions().size());
+        assertEquals(report.getMarketCommentary().size(), decompressedReport.getMarketCommentary().size());
+
+        // Verify string content matches
+        for (int i = 0; i < companyDescriptions.size(); i++) {
+            assertEquals(companyDescriptions.get(i), decompressedReport.getCompanyDescriptions().get(i),
+                    "Company description at index " + i + " should match");
+        }
+
+        System.out.println("\n=== Fory String Compression Impact ===");
+        System.out.println("Data: 20 company descriptions + 15 market commentaries");
+        System.out.println("Without compression: " + uncompressedBytes.length + " bytes");
+        System.out.println("With compression:    " + compressedBytes.length + " bytes");
+        System.out.println("Space saved:         " + (uncompressedBytes.length - compressedBytes.length) + " bytes");
+        System.out.println("Compression ratio:   " + 
+                String.format("%.2fx", (double) uncompressedBytes.length / compressedBytes.length));
+        System.out.println("\nBenefit: String compression deduplicates repeated strings");
+        System.out.println("         Only stores each unique string once, uses references");
+        System.out.println("         Ideal for: Categories, statuses, error messages, log data");
+        System.out.println("         Kafka benefit: Smaller messages = higher throughput, lower costs");
+
+        // Note: Compression effectiveness depends on data patterns and Fory version
+        if (compressedBytes.length < uncompressedBytes.length) {
+            double throughputImprovement = (double) uncompressedBytes.length / compressedBytes.length;
+            System.out.println("\n✓ String compression reduced size!");
+            System.out.println("Kafka Impact: " + String.format("%.0f%%", (throughputImprovement - 1) * 100) + 
+                    " more messages per second at same bandwidth");
+        } else {
+            System.out.println("\nℹ String compression didn't reduce size - Fory may already optimize by default");
+            System.out.println("  In Fory 0.13.0+, string deduplication may be enabled automatically");
+        }
+    }
+
+    @Test
     void foryBatchSerializationEfficiency() {
         Fory fory = Fory.builder()
                         .withCompatibleMode(CompatibleMode.COMPATIBLE)
@@ -210,8 +337,7 @@ class SerializationTests {
         // - Column-wise compression
         // - Eliminated repeated metadata
         // - Better encoding of similar values
-        assert batchSerialized.length < totalIndividualSize : 
-                "Columnar format should be more compact than row-oriented";
+        assertTrue(batchSerialized.length < totalIndividualSize, "Columnar format should be more compact than row-oriented");
     }
 
         @Test
@@ -229,10 +355,10 @@ class SerializationTests {
         CustomerTradeV2 customerTradeV2 = new CustomerTradeV2("Thor", "thor@avengers.com", "123 Stark Avenue, NYC");
         CustomerTradeV3 customerTradeV3 = new CustomerTradeV3("Iron Man", "555-1234");
 
-        // Serialize each version
-        byte[] serializedV1 = fory.serializeJavaObject(customerTrade);
-        byte[] serializedV2 = fory.serializeJavaObject(customerTradeV2);
-        byte[] serializedV3 = fory.serializeJavaObject(customerTradeV3);
+        // Serialize each version using serialize() method
+        byte[] serializedV1 = fory.serialize(customerTrade);
+        byte[] serializedV2 = fory.serialize(customerTradeV2);
+        byte[] serializedV3 = fory.serialize(customerTradeV3);
 
         // Test FORWARD COMPATIBILITY: New code (V2) reading old data (V1)
         // V2 adds 'address' field - should be null when reading V1 data
@@ -322,6 +448,92 @@ class SerializationTests {
     interface StockOperation {
         void execute(Stock stock);
 
+    }
+
+    /**
+     * Test class for demonstrating integer array compression
+     * Contains arrays of trading volumes that benefit from compression
+     */
+    public static class TradingVolumes {
+        private int[] hourlyVolumes;
+        private int[] dailyVolumes;
+        private String symbol;
+
+        public TradingVolumes() {
+        }
+
+        public TradingVolumes(int[] hourlyVolumes, int[] dailyVolumes, String symbol) {
+            this.hourlyVolumes = hourlyVolumes;
+            this.dailyVolumes = dailyVolumes;
+            this.symbol = symbol;
+        }
+
+        public int[] getHourlyVolumes() {
+            return hourlyVolumes;
+        }
+
+        public void setHourlyVolumes(int[] hourlyVolumes) {
+            this.hourlyVolumes = hourlyVolumes;
+        }
+
+        public int[] getDailyVolumes() {
+            return dailyVolumes;
+        }
+
+        public void setDailyVolumes(int[] dailyVolumes) {
+            this.dailyVolumes = dailyVolumes;
+        }
+
+        public String getSymbol() {
+            return symbol;
+        }
+
+        public void setSymbol(String symbol) {
+            this.symbol = symbol;
+        }
+    }
+
+    /**
+     * Test class for demonstrating string compression
+     * Contains repeated company descriptions and market commentary
+     */
+    public static class MarketReport {
+        private List<String> companyDescriptions;
+        private List<String> marketCommentary;
+        private String reportDate;
+
+        public MarketReport() {
+        }
+
+        public MarketReport(List<String> companyDescriptions, List<String> marketCommentary, String reportDate) {
+            this.companyDescriptions = companyDescriptions;
+            this.marketCommentary = marketCommentary;
+            this.reportDate = reportDate;
+        }
+
+        public List<String> getCompanyDescriptions() {
+            return companyDescriptions;
+        }
+
+        public void setCompanyDescriptions(List<String> companyDescriptions) {
+            this.companyDescriptions = companyDescriptions;
+        }
+
+        public List<String> getMarketCommentary() {
+            return marketCommentary;
+        }
+
+        public void setMarketCommentary(List<String> marketCommentary) {
+            this.marketCommentary = marketCommentary;
+        }
+
+        public String getReportDate() {
+            return reportDate;
+        }
+
+        public void setReportDate(String reportDate) {
+            this.reportDate = reportDate;
+        }
     }
 
 

@@ -60,7 +60,7 @@ public class ProducerRunner {
             }
             case FORY -> {
                 props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ForySerializer.class);
-                produceRecords(numRecords, "FORY", "fory-input", new JavaRecordStockSupplier(), props);
+                produceRecords(numRecords, "FORY", "fory-input2", new JavaRecordStockSupplier(), props);
             }
             default -> System.out.println("Invalid message type: " + messageType);
         }
