@@ -15,6 +15,7 @@ import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.serde.KryoDeserializer;
 import io.confluent.developer.serde.KryoSerializer;
 import io.confluent.developer.serde.SbeDeserializer;
+import io.confluent.developer.serde.SbeSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
@@ -169,6 +170,7 @@ public class SerializationBenchmarks {
         ByteBuffer directByteBuffer;
         byte[] deserializationBytes;
         SbeDeserializer sbeDeserializer;
+        SbeSerializer sbeSerializer;
 
         @Setup(Level.Trial)
         public void setUp() {
@@ -176,6 +178,7 @@ public class SerializationBenchmarks {
             stockTradeEncoder = new StockTradeEncoder();
             stockTradeDecoder = new StockTradeDecoder();
             sbeDeserializer = new SbeDeserializer();
+            sbeSerializer = new SbeSerializer();
 
             directByteBuffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
             directUnsafeBuffer = new UnsafeBuffer(directByteBuffer);
@@ -190,7 +193,6 @@ public class SerializationBenchmarks {
             // Create deserialization bytes from the encoded data
             deserializationBytes = new byte[stockTradeEncoder.encodedLength()];
             directUnsafeBuffer.getBytes(0, deserializationBytes);
-            directByteBuffer.clear();
         }
     }
 
@@ -306,14 +308,7 @@ public class SerializationBenchmarks {
 
     @Benchmark
     public void measureSbeSerialization(SbeState state, Blackhole blackhole) {
-        state.stockTradeEncoder.wrapAndApplyHeader(state.directUnsafeBuffer, 0, state.messageHeaderEncoder)
-                .price(PRICE)
-                .shares(SHARES)
-                .symbol(SYMBOL)
-                .exchange(baseline.Exchange.NASDAQ)
-                .txnType(baseline.TxnType.BUY);
-        byte[] results = new byte[state.stockTradeEncoder.limit()];
-        state.directUnsafeBuffer.getBytes(0, results);
+        byte[] results = state.sbeSerializer.serialize("topic", state.stockTradeEncoder);
         blackhole.consume(results);
     }
 

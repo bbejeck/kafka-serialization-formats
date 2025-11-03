@@ -12,9 +12,12 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -77,7 +80,65 @@ public class ProducerRunner {
             }
             producer.flush();
             Instant after = Instant.now();
-            System.out.printf("Producing records for [%s] Took %d milliseconds %n", type, after.toEpochMilli() - start.toEpochMilli());
+            long durationMs = after.toEpochMilli() - start.toEpochMilli();
+            System.out.printf("Producing records for [%s] Took %d milliseconds %n", type, durationMs);
+
+            // Collect and print JMX metrics
+            printProducerMetrics(producer, type, numRecords, durationMs);
         }
+    }
+
+    private static void printProducerMetrics(Producer<?, ?> producer, String type, int numRecords, long durationMs) {
+        Map<MetricName, ? extends Metric> metrics = producer.metrics();
+
+        // Extract key metrics
+        double recordSendRate = getMetricValue(metrics, "record-send-rate");
+        double byteRate = getMetricValue(metrics, "outgoing-byte-rate");
+        double recordSizeAvg = getMetricValue(metrics, "record-size-avg");
+        double recordSizeMax = getMetricValue(metrics, "record-size-max");
+        double batchSizeAvg = getMetricValue(metrics, "batch-size-avg");
+        double recordsPerRequestAvg = getMetricValue(metrics, "records-per-request-avg");
+        double requestLatencyAvg = getMetricValue(metrics, "request-latency-avg");
+        double compressionRate = getMetricValue(metrics, "compression-rate-avg");
+
+        // Calculate derived metrics
+        double actualThroughput = numRecords / (durationMs / 1000.0);
+        double totalMB = (recordSizeAvg * numRecords) / (1024.0 * 1024.0);
+
+        System.out.println("\n╔═════════════════════════════════════════════════════════╗");
+        System.out.printf("║ PRODUCER METRICS - %s%n", type);
+        System.out.println("╠═════════════════════════════════════════════════════════╣");
+        System.out.println("║ SERIALIZATION EFFICIENCY (Lower = Better)              ║");
+        System.out.printf("║   Avg Record Size:       %.2f bytes  ← KEY METRIC%n", recordSizeAvg);
+        System.out.printf("║   Max Record Size:       %.2f bytes%n", recordSizeMax);
+        System.out.printf("║   Total Data Size:       %.2f MB%n", totalMB);
+        if (compressionRate > 0) {
+            System.out.printf("║   Compression Ratio:     %.2f%n", compressionRate);
+        }
+        System.out.println("╠═════════════════════════════════════════════════════════╣");
+        System.out.println("║ THROUGHPUT (Higher = Better)                           ║");
+        System.out.printf("║   Record Send Rate:      %.2f records/sec%n", recordSendRate);
+        System.out.printf("║   Actual Throughput:     %.2f records/sec%n", actualThroughput);
+        System.out.printf("║   Byte Rate:             %.2f KB/sec%n", byteRate / 1024.0);
+        System.out.println("╠═════════════════════════════════════════════════════════╣");
+        System.out.println("║ BATCHING EFFICIENCY                                     ║");
+        System.out.printf("║   Avg Batch Size:        %.2f bytes%n", batchSizeAvg);
+        System.out.printf("║   Records per Request:   %.2f%n", recordsPerRequestAvg);
+        System.out.printf("║   Request Latency:       %.2f ms%n", requestLatencyAvg);
+        System.out.println("╚═════════════════════════════════════════════════════════╝\n");
+    }
+
+    private static double getMetricValue(Map<MetricName, ? extends Metric> metrics, String metricName) {
+        return metrics.entrySet().stream()
+            .filter(entry -> entry.getKey().name().equals(metricName))
+            .findFirst()
+            .map(entry -> {
+                Object value = entry.getValue().metricValue();
+                if (value instanceof Number) {
+                    return ((Number) value).doubleValue();
+                }
+                return 0.0;
+            })
+            .orElse(0.0);
     }
 }

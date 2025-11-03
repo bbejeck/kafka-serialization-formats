@@ -37,7 +37,6 @@ public class ConsumerRunner {
         props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10000);
         props.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, 1048576);
         props.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 500);
-        props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 10485760); // 10MB per partition
         props.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, 1048576);
 
         int numRecords = Integer.parseInt(args[1]);

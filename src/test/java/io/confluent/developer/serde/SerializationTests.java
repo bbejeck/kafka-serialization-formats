@@ -116,10 +116,10 @@ class SerializationTests {
         assertEquals(26,sbeBytes.length);
 
         StockTradeDecoder stockTradeDecoder = sbeNonDirectDeserializer.deserialize("topic", sbeBytes);
-        assertEquals(price, stockTradeDecoder.price());
-        assertEquals(shares, stockTradeDecoder.shares());
-        assertEquals("CFLT", stockTradeDecoder.symbol());
         assertEquals(Exchange.NASDAQ, stockTradeDecoder.exchange());
+        assertEquals(shares, stockTradeDecoder.shares());
+        assertEquals(price, stockTradeDecoder.price());
+        assertEquals("CFLT", stockTradeDecoder.symbol());
         assertEquals(TxnType.BUY, stockTradeDecoder.txnType());
     }
 

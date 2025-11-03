@@ -6,8 +6,7 @@ buildscript {
 
 plugins {
     id 'java'
-    id "com.google.protobuf" version "0.9.4"
-    id "com.github.davidmc24.gradle.plugin.avro" version "1.9.1"
+    id "com.google.protobuf" version "0.9.5"
     id 'com.gradleup.shadow' version '9.2.2'
 }
 
@@ -47,7 +46,7 @@ shadowJar {
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:4.29.3'
+        artifact = 'com.google.protobuf:protoc:4.33.0'
     }
 }
 
@@ -205,22 +204,20 @@ processResources {
 
 dependencies {
     implementation 'org.apache.kafka:kafka-clients:4.1.0'
+    implementation 'org.apache.kafka:kafka-streams:4.1.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
     implementation 'net.datafaker:datafaker:2.5.1'
 
     implementation 'org.openjdk.jmh:jmh-core:1.37'
     implementation 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
     annotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
-    implementation 'com.google.protobuf:protobuf-java:4.29.3'
-    implementation 'org.apache.avro:avro:1.12.0'
+    implementation 'com.google.protobuf:protobuf-java:4.33.0'
     implementation 'uk.co.real-logic:sbe-all:1.36.0'
     implementation 'com.esotericsoftware:kryo:5.6.2'
-    implementation 'org.apache.fory:fory-core:0.12.3'
+    implementation 'org.apache.fory:fory-core:0.13.0'
     implementation 'org.capnproto:runtime:0.1.16'
 
-    implementation "io.confluent:kafka-avro-serializer:8.0.0"
     implementation "io.confluent:kafka-protobuf-serializer:8.0.0"
-    implementation "io.confluent:kafka-json-serializer:8.0.0"
     implementation "io.confluent:kafka-schema-registry-client:8.0.0"
     implementation "io.confluent:kafka-protobuf-provider:8.0.0"
 
