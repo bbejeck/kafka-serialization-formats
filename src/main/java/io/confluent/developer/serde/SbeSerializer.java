@@ -14,12 +14,13 @@ public class SbeSerializer implements Serializer<StockTradeEncoder> {
             return null;
         }
         ByteBuffer byteBuffer = stockTradeEncoder.buffer().byteBuffer();
-
+        // Zero copy option - has a heap-based buffer
         if (byteBuffer.hasArray() && byteBuffer.array().length == stockTradeEncoder.limit()) {
             return byteBuffer.array();
         }
-        byteBuffer.rewind();
+        // Otherwise non-heap buffer and must create array and copy bytes from the buffer
         byte[] array = new byte[stockTradeEncoder.limit()];
+        byteBuffer.rewind();
         byteBuffer.get(array, 0, stockTradeEncoder.limit());
         return array;
     }

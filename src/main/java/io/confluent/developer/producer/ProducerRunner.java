@@ -17,6 +17,8 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,11 +35,11 @@ public class ProducerRunner {
     public static void main(String[] args) {
 
         if (args.length == 0) {
-            System.out.println("Usage ProducerRunner json|proto|sbe|fory numRecords");
+            System.out.println("Usage ProducerRunner json|proto|sbe|fory");
             System.exit(1);
         }
         String messageType = args[0].toLowerCase();
-        int numRecords = Integer.parseInt(args[1]);
+        int numRecords = 1_000_000;
         Properties props = Utils.getProperties();
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, 1048576);
@@ -65,15 +67,19 @@ public class ProducerRunner {
     }
 
     private static <V> void produceRecords(int numRecords, String type, String topic, Supplier<V> recordSupplier, Properties props) {
+        List<V> records = new ArrayList<>();
+        for (int i = 0; i < numRecords; i++) {
+            records.add(recordSupplier.get());
+        }
         Instant start = Instant.now();
         AtomicInteger counter = new AtomicInteger(1);
         try (Producer<byte[], V> producer = new KafkaProducer<>(props)) {
-            for (int i = 0; i < numRecords; i++) {
-                producer.send(new ProducerRecord<>(topic, recordSupplier.get()), (metadata, exception) -> {
+            for (V record : records) {
+                producer.send(new ProducerRecord<>(topic, record), (metadata, exception) -> {
                     if (exception != null) {
                         System.out.printf("Error producing message %s%n", exception);
                     }
-                    if (counter.getAndIncrement() % 1_000_000 == 0) {
+                    if (counter.getAndIncrement() % 100_000 == 0) {
                         System.out.printf("Produced %d records%n", counter.get());
                     }
                 });

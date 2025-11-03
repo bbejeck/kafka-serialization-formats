@@ -13,14 +13,6 @@ This project provides performance benchmarks for different serialization approac
 - **Use Case**: Human-readable, REST APIs, debugging
 - **Trade-offs**: Larger payload size, slower than binary formats
 
-### 2. **Apache Avro**
-- **Type**: Binary, schema-based
-- **Variants Tested**:
-  - Raw Avro serialization
-  - Confluent Schema Registry integration
-- **Use Case**: Schema evolution, data lakes, analytics pipelines
-- **Trade-offs**: Compact, schema evolution support, requires Schema Registry for full benefits
-
 ### 3. **Protocol Buffers (Protobuf)**
 - **Type**: Binary, schema-based
 - **Variants Tested**:

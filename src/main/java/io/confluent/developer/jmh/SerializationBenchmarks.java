@@ -16,9 +16,6 @@ import io.confluent.developer.serde.KryoDeserializer;
 import io.confluent.developer.serde.KryoSerializer;
 import io.confluent.developer.serde.SbeDeserializer;
 import io.confluent.developer.serde.SbeSerializer;
-import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
-import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializerConfig;
-import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.fory.Fory;
 import org.capnproto.ArrayOutputStream;
@@ -48,8 +45,6 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 
@@ -81,35 +76,6 @@ public class SerializationBenchmarks {
             jrStock = new Stock(PRICE, SHARES, SYMBOL, EXCHANGE, TXN_TYPE);
             jacksonBytes = mapper.writeValueAsBytes(jrStock);
             serializationBuffer = new byte[BUFFER_SIZE];
-        }
-    }
-
-    @State(Scope.Benchmark)
-    public static class SchemaRegistryProtoState {
-        KafkaProtobufSerializer<StockProto> protobufSerializer;
-        KafkaProtobufDeserializer<StockProto> protobufDeserializer;
-        byte[] serializedStock;
-        StockProto stockProto;
-        byte[] serializationBuffer;
-
-        @Setup(Level.Trial)
-        public void setup() {
-            protobufSerializer = new KafkaProtobufSerializer<>();
-            protobufDeserializer = new KafkaProtobufDeserializer<>();
-            stockProto = stockProto();
-            Map<String, Object> config = new HashMap<>();
-            config.put("schema.registry.url", "mock://localhost:8081");
-            protobufSerializer.configure(config, false);
-            protobufDeserializer.configure(config, false);
-            serializedStock = protobufSerializer.serialize("topic_proto", stockProto);
-            protobufDeserializer.deserialize("topic_proto", serializedStock);
-            serializationBuffer = new byte[BUFFER_SIZE];
-        }
-
-        @TearDown(Level.Trial)
-        public void tearDown() {
-            if (protobufSerializer != null) protobufSerializer.close();
-            if (protobufDeserializer != null) protobufDeserializer.close();
         }
     }
 
@@ -164,10 +130,13 @@ public class SerializationBenchmarks {
     @State(Scope.Benchmark)
     public static class SbeState {
         MessageHeaderEncoder messageHeaderEncoder;
-        StockTradeEncoder stockTradeEncoder;
+        StockTradeEncoder stockTradeEncoderDirect;
+        StockTradeEncoder stockTradeEncoderHeap;
         StockTradeDecoder stockTradeDecoder;
         UnsafeBuffer directUnsafeBuffer;
+        UnsafeBuffer heapUnsafeBuffer;
         ByteBuffer directByteBuffer;
+        ByteBuffer heapByteBuffer;
         byte[] deserializationBytes;
         SbeDeserializer sbeDeserializer;
         SbeSerializer sbeSerializer;
@@ -175,24 +144,35 @@ public class SerializationBenchmarks {
         @Setup(Level.Trial)
         public void setUp() {
             messageHeaderEncoder = new MessageHeaderEncoder();
-            stockTradeEncoder = new StockTradeEncoder();
+            stockTradeEncoderDirect = new StockTradeEncoder();
+            stockTradeEncoderHeap = new StockTradeEncoder();
             stockTradeDecoder = new StockTradeDecoder();
             sbeDeserializer = new SbeDeserializer();
             sbeSerializer = new SbeSerializer();
 
-            directByteBuffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
+            directByteBuffer = ByteBuffer.allocateDirect(StockTradeEncoder.BLOCK_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH);
             directUnsafeBuffer = new UnsafeBuffer(directByteBuffer);
+            heapByteBuffer = ByteBuffer.allocate(StockTradeEncoder.BLOCK_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH);
+            heapUnsafeBuffer = new UnsafeBuffer(heapByteBuffer);
 
-            stockTradeEncoder.wrapAndApplyHeader(directUnsafeBuffer, 0, messageHeaderEncoder)
+            stockTradeEncoderDirect.wrapAndApplyHeader(directUnsafeBuffer, 0, messageHeaderEncoder)
                     .price(PRICE)
                     .shares(SHARES)
                     .symbol(SYMBOL)
                     .exchange(baseline.Exchange.NASDAQ)
                     .txnType(baseline.TxnType.BUY);
 
+            stockTradeEncoderHeap.wrapAndApplyHeader(heapUnsafeBuffer, 0, messageHeaderEncoder)
+                    .price(PRICE)
+                    .shares(SHARES)
+                    .symbol(SYMBOL)
+                    .exchange(baseline.Exchange.NASDAQ)
+                    .txnType(baseline.TxnType.BUY);
+
+
             // Create deserialization bytes from the encoded data
-            deserializationBytes = new byte[stockTradeEncoder.encodedLength()];
-            directUnsafeBuffer.getBytes(0, deserializationBytes);
+            deserializationBytes = sbeSerializer.serialize("topic", stockTradeEncoderDirect);
+
         }
     }
 
@@ -276,20 +256,6 @@ public class SerializationBenchmarks {
         blackhole.consume(result);
     }
 
-    // ==================== Kafka Schema Registry Protobuf Benchmarks ====================
-
-    @Benchmark
-    public void measureKafkaSchemaRegistryProtobufSerialization(SchemaRegistryProtoState state, Blackhole blackhole) {
-        byte[] result = state.protobufSerializer.serialize("topic", state.stockProto);
-        blackhole.consume(result);
-    }
-
-    @Benchmark
-    public void measureKafkaSchemaRegistryProtobufDeserialization(SchemaRegistryProtoState state, Blackhole blackhole) {
-        StockProto result = state.protobufDeserializer.deserialize("topic", state.serializedStock);
-        blackhole.consume(result);
-    }
-
     // ==================== Raw Protobuf Benchmarks ====================
 
     @Benchmark
@@ -307,8 +273,14 @@ public class SerializationBenchmarks {
     // ==================== SBE Benchmarks ====================
 
     @Benchmark
-    public void measureSbeSerialization(SbeState state, Blackhole blackhole) {
-        byte[] results = state.sbeSerializer.serialize("topic", state.stockTradeEncoder);
+    public void measureSbeSerializationDirectBuffer(SbeState state, Blackhole blackhole) {
+        byte[] results = state.sbeSerializer.serialize("topic", state.stockTradeEncoderDirect);
+        blackhole.consume(results);
+    }
+
+    @Benchmark
+    public void measureSbeSerializationHeapBuffer(SbeState state, Blackhole blackhole) {
+        byte[] results = state.sbeSerializer.serialize("topic", state.stockTradeEncoderHeap);
         blackhole.consume(results);
     }
 

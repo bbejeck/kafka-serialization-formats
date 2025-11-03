@@ -219,10 +219,6 @@ dependencies {
     implementation 'org.apache.fory:fory-core:0.13.0'
     implementation 'org.capnproto:runtime:0.1.16'
 
-    implementation "io.confluent:kafka-protobuf-serializer:8.0.0"
-    implementation "io.confluent:kafka-schema-registry-client:8.0.0"
-    implementation "io.confluent:kafka-protobuf-provider:8.0.0"
-
     implementation 'org.slf4j:slf4j-simple:2.0.17'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:6.0.0'

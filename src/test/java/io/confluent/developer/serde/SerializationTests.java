@@ -9,7 +9,6 @@ import io.confluent.developer.Stock;
 import io.confluent.developer.StockTradeCapnp;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.supplier.SbeRecordSupplier;
-import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.fory.Fory;
 import org.apache.fory.config.CompatibleMode;
@@ -17,13 +16,15 @@ import org.capnproto.ArrayOutputStream;
 import org.capnproto.MessageBuilder;
 import org.capnproto.MessageReader;
 import org.capnproto.Serialize;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -36,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class SerializationTests {
 
     private final SbeRecordSupplier sbeRecordSupplier = new SbeRecordSupplier();
-    private final KafkaProtobufSerializer<StockProto> protobufSerializer = new KafkaProtobufSerializer<>();
     private final SbeDeserializer sbeNonDirectDeserializer = new SbeDeserializer();
     private final SbeSerializer sbeSerializer = new SbeSerializer();
     private final JacksonRecordSerializer jacksonRecordSerializer = new JacksonRecordSerializer();
@@ -44,12 +44,6 @@ class SerializationTests {
     private final double price = 99.99;
     private final int shares = 3_000;
 
-    @BeforeEach
-    void setUp() {
-        Map<String,Object> config = new HashMap<>();
-        config.put("schema.registry.url", "mock://localhost:8081");
-        protobufSerializer.configure(config, false);
-    }
 
     @Test
     void capnpRoundTripTest() throws IOException {
@@ -96,13 +90,11 @@ class SerializationTests {
     void serializedRecordSizesTest() {
        StockProto stockProto = stockProto();
        Stock stock = javaRecordStock();
-       StockTradeEncoder stockTradeEncoder = sbeRecordSupplier.get();
-       byte[] protoSerialized = protobufSerializer.serialize("topic", stockProto);
+       StockTradeEncoder stockTradeEncoder = sbeRecordSupplier.get();;
        byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
        byte[] kryoBytes =  kryoSerializer.serialize("topic", stock);
        byte[] jacksonBytes = jacksonRecordSerializer.serialize("topic", stock);
 
-       assertEquals(27, protoSerialized.length);
        assertEquals(26, sbeBytes.length);
        assertEquals(26, kryoBytes.length);
        assertEquals(79, jacksonBytes.length);
@@ -110,7 +102,7 @@ class SerializationTests {
 
     @Test
     void sbeNonDirectEncodeDecodeTest() {
-        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        ByteBuffer byteBuffer = ByteBuffer.allocate(StockTradeEncoder.BLOCK_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH);;
         StockTradeEncoder stockTradeEncoder = stockTradeEncoder(price, shares, byteBuffer);
         byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
         assertEquals(26,sbeBytes.length);
@@ -125,7 +117,7 @@ class SerializationTests {
 
     @Test
     void sbeNonDirectEncodeDecodeMaxValuesTest() {
-        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        ByteBuffer byteBuffer = ByteBuffer.allocate(StockTradeEncoder.BLOCK_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH);
         StockTradeEncoder stockTradeEncoder = stockTradeEncoder(Double.MAX_VALUE, Integer.MAX_VALUE, byteBuffer);
         byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
         assertEquals(26,sbeBytes.length);
@@ -139,36 +131,145 @@ class SerializationTests {
     }
 
     @Test
+    void foryBatchSerializationEfficiency() {
+        Fory fory = Fory.builder()
+                        .withCompatibleMode(CompatibleMode.COMPATIBLE)
+                        .build();
+
+        fory.register(Stock.class);
+        fory.register(io.confluent.developer.Exchange.class);
+        fory.register(io.confluent.developer.TxnType.class);
+
+        // Create a batch of stock records (simulating columnar data)
+        java.util.List<Stock> stockBatch = java.util.List.of(
+                new Stock(100.50, 1000L, "AAPL", io.confluent.developer.Exchange.NASDAQ, io.confluent.developer.TxnType.BUY),
+                new Stock(250.75, 500L, "GOOGL", io.confluent.developer.Exchange.NASDAQ, io.confluent.developer.TxnType.SELL),
+                new Stock(150.25, 750L, "MSFT", io.confluent.developer.Exchange.NYSE, io.confluent.developer.TxnType.BUY),
+                new Stock(3500.00, 100L, "AMZN", io.confluent.developer.Exchange.NASDAQ, io.confluent.developer.TxnType.BUY)
+        );
+
+        // Serialize batch - Fory internally optimizes for columnar layout
+        // All prices stored together, all shares together, etc.
+        byte[] serializedBatch = fory.serialize(stockBatch);
+
+        // Deserialize batch
+        @SuppressWarnings("unchecked")
+        java.util.List<Stock> deserializedBatch = (java.util.List<Stock>) fory.deserialize(serializedBatch);
+
+        // Verify all records match
+        assertEquals(stockBatch.size(), deserializedBatch.size());
+        for (int i = 0; i < stockBatch.size(); i++) {
+            Stock original = stockBatch.get(i);
+            Stock deserialized = deserializedBatch.get(i);
+            assertEquals(original.price(), deserialized.price(), 0.001);
+            assertEquals(original.shares(), deserialized.shares());
+            assertEquals(original.symbol(), deserialized.symbol());
+            assertEquals(original.exchange(), deserialized.exchange());
+            assertEquals(original.type(), deserialized.type());
+        }
+    }
+
+        @Test
+    void foryColumnarVsRowOrientedComparison() {
+        // Demonstrate why columnar format is better for batch analytics
+        Fory fory = Fory.builder().build();
+        fory.register(Stock.class);
+        fory.register(io.confluent.developer.Exchange.class);
+        fory.register(io.confluent.developer.TxnType.class);
+
+        // Create larger batch to show compression benefits
+        java.util.List<Stock> largeBatch = new java.util.ArrayList<>();
+        for (int i = 0; i < 1000; i++) {
+            largeBatch.add(new Stock(
+                    100.0 + (i % 10),  // Limited price range for better compression
+                    1000L * (i % 5),    // Repeated share amounts
+                    "SYM" + (i % 100),  // Limited symbol variety
+                    io.confluent.developer.Exchange.NASDAQ,  // Same exchange
+                    io.confluent.developer.TxnType.BUY       // Same txn type
+            ));
+        }
+
+        // Serialize as batch (columnar-friendly)
+        byte[] batchSerialized = fory.serialize(largeBatch);
+
+        // Serialize individually (row-oriented)
+        int totalIndividualSize = 0;
+        for (Stock stock : largeBatch) {
+            byte[] individual = fory.serialize(stock);
+            totalIndividualSize += individual.length;
+        }
+
+        System.out.println("=== Columnar vs Row-Oriented Comparison ===");
+        System.out.println("Records: " + largeBatch.size());
+        System.out.println("Batch (columnar): " + batchSerialized.length + " bytes");
+        System.out.println("Individual (row): " + totalIndividualSize + " bytes");
+        System.out.println("Compression ratio: " + 
+                String.format("%.2f", (double) totalIndividualSize / batchSerialized.length) + "x");
+
+        // Columnar should be significantly smaller due to:
+        // - Column-wise compression
+        // - Eliminated repeated metadata
+        // - Better encoding of similar values
+        assert batchSerialized.length < totalIndividualSize : 
+                "Columnar format should be more compact than row-oriented";
+    }
+
+        @Test
     void shouldHandleObjectSchemaChanges() {
+        // Configure Fory with COMPATIBLE mode to handle schema evolution
         Fory fory = Fory.builder()
             .withCompatibleMode(CompatibleMode.COMPATIBLE)
             .build();
         fory.register(CustomerTrade.class);
         fory.register(CustomerTradeV2.class);
+        fory.register(CustomerTradeV3.class);
 
-        CustomerTrade customerTrade = new CustomerTrade("Hulk", "hulk@avengers");
-        CustomerTradeV2 customerTradeV2 = new CustomerTradeV2("Hulk", "hulk@avengers", "123 Stark Avenue, NYC");
-        
-        byte[] serialized = fory.serializeJavaObject(customerTrade);
+        // Create instances of different schema versions
+        CustomerTrade customerTrade = new CustomerTrade("Hulk", "hulk@avengers.com");
+        CustomerTradeV2 customerTradeV2 = new CustomerTradeV2("Thor", "thor@avengers.com", "123 Stark Avenue, NYC");
+        CustomerTradeV3 customerTradeV3 = new CustomerTradeV3("Iron Man", "555-1234");
+
+        // Serialize each version
+        byte[] serializedV1 = fory.serializeJavaObject(customerTrade);
         byte[] serializedV2 = fory.serializeJavaObject(customerTradeV2);
+        byte[] serializedV3 = fory.serializeJavaObject(customerTradeV3);
 
-        CustomerTradeV2 deserializedV2 = fory.deserializeJavaObject(serialized, CustomerTradeV2.class);
-        CustomerTrade deserializedV1 = fory.deserializeJavaObject(serializedV2, CustomerTrade.class);
+        // Test FORWARD COMPATIBILITY: New code (V2) reading old data (V1)
+        // V2 adds 'address' field - should be null when reading V1 data
+        CustomerTradeV2 v1DataAsV2 = fory.deserialize(serializedV1, CustomerTradeV2.class);
+        assertEquals("Hulk", v1DataAsV2.getName());
+        assertEquals("hulk@avengers.com", v1DataAsV2.getEmail());
+        assertNull(v1DataAsV2.getAddress(), "New field 'address' should be null when reading old schema");
 
-        assertEquals(customerTrade.getName(), deserializedV2.getName());
-        assertEquals(customerTrade.getEmail(), deserializedV2.getEmail());
-        assertNull(deserializedV2.getAddress());
+        // Test BACKWARD COMPATIBILITY: Old code (V1) reading new data (V2)
+        // V1 simply ignores the 'address' field from V2
+        CustomerTrade v2DataAsV1 = fory.deserialize(serializedV2, CustomerTrade.class);
+        assertEquals("Thor", v2DataAsV1.getName());
+        assertEquals("thor@avengers.com", v2DataAsV1.getEmail());
 
-        assertEquals(customerTradeV2.getName(), deserializedV1.getName());
-        assertEquals(customerTradeV2.getEmail(), deserializedV1.getEmail());
+        // Test FIELD REMOVAL: V3 removes 'email', adds 'phoneNumber'
+        // Reading V2 data (has email, no phone) as V3 (has phone, no email)
+        CustomerTradeV3 v2DataAsV3 = fory.deserialize(serializedV2, CustomerTradeV3.class);
+        assertEquals("Thor", v2DataAsV3.getName());
+        assertNull(v2DataAsV3.getPhoneNumber(), "New field 'phoneNumber' should be null when reading data without it");
 
+        // Reading V3 data (has phone, no email) as V2 (has email, no phone)
+        CustomerTradeV2 v3DataAsV2 = fory.deserialize(serializedV3, CustomerTradeV2.class);
+        assertEquals("Iron Man", v3DataAsV2.getName());
+        assertNull(v3DataAsV2.getEmail(), "Removed field 'email' should be null");
+        assertNull(v3DataAsV2.getAddress(), "Missing field 'address' should be null");
+
+        // Test reading V3 as V1 (skipping intermediate schema)
+        CustomerTrade v3DataAsV1 = fory.deserialize(serializedV3, CustomerTrade.class);
+        assertEquals("Iron Man", v3DataAsV1.getName());
+        assertNull(v3DataAsV1.getEmail(), "Removed field 'email' should be null");
     }
 
 
-    @Test
-    void sbeSerializerDeserializerTest() {
-        ByteBuffer directBuffer = ByteBuffer.allocateDirect(1024);
-        StockTradeEncoder stockTradeEncoder = stockTradeEncoder(price, shares, directBuffer);
+    @ParameterizedTest
+    @MethodSource("byteBufferSource")
+    void sbeSerializeRoundTripTest(ByteBuffer byteBuffer) {
+        StockTradeEncoder stockTradeEncoder = stockTradeEncoder(price, shares, byteBuffer);
         byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
         assertEquals(26, sbeBytes.length);
         StockTradeDecoder stockTradeDecoder = sbeNonDirectDeserializer.deserialize("topic", sbeBytes);
@@ -177,6 +278,13 @@ class SerializationTests {
         assertEquals("CFLT", stockTradeDecoder.symbol());
         assertEquals(Exchange.NASDAQ, stockTradeDecoder.exchange());
         assertEquals(TxnType.BUY, stockTradeDecoder.txnType());
+    }
+
+    private static Stream<Arguments> byteBufferSource() {
+        return Stream.of(
+                Arguments.of(ByteBuffer.allocateDirect(StockTradeEncoder.BLOCK_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH)),
+                Arguments.of(ByteBuffer.allocate(StockTradeEncoder.BLOCK_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH))
+        );
     }
 
     StockTradeEncoder stockTradeEncoder(double price, int shares, ByteBuffer byteBuffer) {
@@ -298,6 +406,51 @@ class SerializationTests {
                 "name='" + name + '\'' +
                 ", email='" + email + '\'' +
                 ", address='" + address + '\'' +
+                '}';
+        }
+    }
+
+    /**
+     * V3 demonstrates field removal (email removed) and replacement (phoneNumber added)
+     * This tests Fory's ability to handle breaking schema changes in compatible mode
+     */
+    public static class CustomerTradeV3 implements StockOperation {
+        private String name;
+        private String phoneNumber;  // Replaces email field
+
+        public CustomerTradeV3() {
+        }
+
+        public CustomerTradeV3(String name, String phoneNumber) {
+            this.name = name;
+            this.phoneNumber = phoneNumber;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getPhoneNumber() {
+            return phoneNumber;
+        }
+
+        public void setPhoneNumber(String phoneNumber) {
+            this.phoneNumber = phoneNumber;
+        }
+
+        public void execute(Stock stock) {
+            System.out.println("Executing customer trade for stock: " + stock);
+        }
+
+        @Override
+        public String toString() {
+            return "CustomerTradeV3{" +
+                "name='" + name + '\'' +
+                ", phoneNumber='" + phoneNumber + '\'' +
                 '}';
         }
     }

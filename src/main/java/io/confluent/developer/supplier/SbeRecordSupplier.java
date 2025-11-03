@@ -17,7 +17,7 @@ import java.util.function.Supplier;
  * Time: 4:04 PM
  */
 public class SbeRecordSupplier implements Supplier<StockTradeEncoder> {
-    ByteBuffer byteBuffer = ByteBuffer.allocate(26);
+    ByteBuffer byteBuffer = ByteBuffer.allocate(StockTradeEncoder.BLOCK_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH);
     UnsafeBuffer unsafeBuffer = new UnsafeBuffer(byteBuffer);
     MessageHeaderEncoder messageHeaderEncoder = new MessageHeaderEncoder();
     StockTradeEncoder stockTradeEncoder = new StockTradeEncoder();
