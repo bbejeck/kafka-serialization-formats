@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   xmlns:xi="http://www.w3.org/2001/XInclude"
+                   package="baseline"
+                   id="2"
+                   version="0"
+                   semanticVersion="5.2"
+                   description="Trade aggregate schema for Kafka Streams state store serialization benchmarking."
+                   byteOrder="littleEndian">
+
+    <xi:include href="common-types.xml"/>
+
+    <sbe:message name="TradeAggregate" id="2" description="Aggregated trade data for windowed operations">
+        <field name="totalVolume" id="1" type="double" description="Total volume (price * shares summed)"/>
+        <field name="volumeWeightedPrice" id="2" type="double" description="Volume weighted average price (VWAP)"/>
+        <field name="tradeCount" id="3" type="uint64" description="Number of trades in this aggregate"/>
+        <field name="minPrice" id="4" type="double" description="Minimum price in the window"/>
+        <field name="maxPrice" id="5" type="double" description="Maximum price in the window"/>
+    </sbe:message>
+</sbe:messageSchema>

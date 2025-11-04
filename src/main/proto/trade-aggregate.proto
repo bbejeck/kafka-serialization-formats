@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package io.confluent.developer.proto;
+
+option java_multiple_files = true;
+option java_outer_classname = "TradeAggregateProtoOuter";
+
+/**
+ * Trade aggregate message for Kafka Streams state store serialization benchmarking.
+ * Used to demonstrate serialization performance differences in stateful stream processing.
+ * 
+ * Every read/write to a Kafka Streams state store requires serialization/deserialization,
+ * making this a good benchmark for comparing Proto, SBE, JSON, and Fury performance.
+ */
+message TradeAggregateProto {
+  // Total volume (sum of price * shares for all trades)
+  double total_volume = 1;
+
+  // Volume weighted average price (VWAP)
+  double volume_weighted_price = 2;
+
+  // Number of trades aggregated
+  int64 trade_count = 3;
+
+  // Minimum price observed in the window
+  double min_price = 4;
+
+  // Maximum price observed in the window
+  double max_price = 5;
+}
