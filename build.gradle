@@ -70,7 +70,7 @@ tasks.register('sbe', JavaExec) {
     description = "Runs the SBE tool to generate code from schemas"
     classpath = configurations.runtimeClasspath
     mainClass = "uk.co.real_logic.sbe.SbeTool"
-    args "src/main/resources/sbe-schema/stock-schema.xml"
+    args "src/main/resources/sbe-schema/stock-schema.xml", "src/main/resources/sbe-schema/trade-aggregate-schema.xml"
 }
 
 tasks.register('capnp', Exec) {
