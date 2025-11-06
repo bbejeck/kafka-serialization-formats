@@ -7,11 +7,16 @@ import io.confluent.developer.serde.*;
 import io.confluent.developer.util.Utils;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -24,12 +29,12 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Kafka Streams application for benchmarking serialization performance in stateful operations.
- * 
+ * <p>
  * This application demonstrates how serialization format affects performance in Kafka Streams
  * state stores, where every put/get operation requires serialization/deserialization.
- * 
+ * <p>
  * Topology: Stock trades → Session Windows → Aggregate (TradeAggregate) → Output
- * 
+ * <p>
  * Usage: StatefulStreamsRunner <json|sbe|fury> <durationSeconds>
  */
 public class StatefulStreamsRunner {
@@ -37,6 +42,11 @@ public class StatefulStreamsRunner {
     private static final String JSON = "json";
     private static final String SBE = "sbe";
     private static final String FURY = "fury";
+    private final Serde<TradeAggregateDto> tradeAggregateDtoSerde = Serdes.serdeFrom(new TradeAggregateDtoSerializer(), new TradeAggregateDtoDeserializer());
+    private final Serde<TradeAggregate> tradeAggregateFurySerde = Serdes.serdeFrom(new TradeAggregateFurySerializer(), new TradeAggregateFuryDeserializer());
+    private final Serde<TradeAggregate> tradeAggregateJsonSerde = Serdes.serdeFrom(new TradeAggregateJsonSerializer(), new TradeAggregateJsonDeserializer());
+    private final Serde<Stock> stockSerde = Serdes.serdeFrom(new JacksonRecordSerializer(), new JacksonRecordDeserializer());
+    private final Serde<String> stringSerde = Serdes.String();
 
     private static Instant startTime;
 
@@ -51,29 +61,28 @@ public class StatefulStreamsRunner {
 
         Properties props = getStreamsConfig(format);
         StreamsBuilder builder = new StreamsBuilder();
+        StatefulStreamsRunner runner = new StatefulStreamsRunner();
 
         switch (format) {
-            case JSON -> buildJsonTopology(builder);
-            case SBE -> buildSbeTopology(builder);
-            case FURY -> buildFuryTopology(builder);
+            case JSON -> runner.buildJsonTopology(builder);
+            case SBE -> runner.buildSbeTopology(builder);
+            case FURY -> runner.buildFuryTopology(builder);
             default -> {
                 System.out.println("Invalid format: " + format);
                 System.exit(1);
             }
         }
 
-        runStreamsWithMetrics(builder, props, format, durationSeconds);
+        runner.runStreamsWithMetrics(builder, props, format, durationSeconds);
     }
 
-    private static void buildJsonTopology(StreamsBuilder builder) {
+    private void buildJsonTopology(StreamsBuilder builder) {
         KStream<String, Stock> trades = builder.stream("json-input",
-            Consumed.with(Serdes.String(), 
-                Serdes.serdeFrom(new JacksonRecordSerializer(), new JacksonRecordDeserializer())));
+            Consumed.with(stringSerde, stockSerde));
 
         trades
             .selectKey((key, stock) -> stock.symbol())
-            .groupByKey(Grouped.with(Serdes.String(), 
-                Serdes.serdeFrom(new JacksonRecordSerializer(), new JacksonRecordDeserializer())))
+            .groupByKey(Grouped.with(stringSerde, stockSerde))
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)))
             .aggregate(
                 TradeAggregate::new,
@@ -86,23 +95,20 @@ public class StatefulStreamsRunner {
             )
             .toStream()
             .to("json-output", Produced.with(
-                WindowedSerdes.sessionWindowedSerdeFrom(String.class),
-                Serdes.serdeFrom(new TradeAggregateJsonSerializer(), new TradeAggregateJsonDeserializer())
+                WindowedSerdes.sessionWindowedSerdeFrom(String.class), tradeAggregateJsonSerde
             ));
     }
 
-    private static void buildSbeTopology(StreamsBuilder builder) {
+    private void buildSbeTopology(StreamsBuilder builder) {
         KStream<String, Stock> trades = builder.stream("sbe-input",
-            Consumed.with(Serdes.String(), 
-                Serdes.serdeFrom(new JacksonRecordSerializer(), new JacksonRecordDeserializer())));
+            Consumed.with(stringSerde, stockSerde));
 
         trades
             .selectKey((key, stock) -> stock.symbol())
-            .groupByKey(Grouped.with(Serdes.String(), 
-                Serdes.serdeFrom(new JacksonRecordSerializer(), new JacksonRecordDeserializer())))
+            .groupByKey(Grouped.with(stringSerde, stockSerde))
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)))
             .aggregate(
-                baseline.TradeAggregateDto::new,
+                TradeAggregateDto::new,
                 (key, stock, aggregate) -> {
                     // Update DTO
                     aggregate.totalVolume(aggregate.totalVolume() + (stock.shares() * stock.price()));
@@ -129,24 +135,24 @@ public class StatefulStreamsRunner {
                     merged.maxPrice(Math.max(agg1.maxPrice(), agg2.maxPrice()));
                     return merged;
                 },
-                Materialized.as("trade-aggregates-sbe")
+                Materialized.<String, TradeAggregateDto, SessionStore<Bytes, byte[]>>as("trade-aggregates-sbeDto")
+                    .withKeySerde(stringSerde)
+                    .withValueSerde(tradeAggregateDtoSerde)
             )
             .toStream()
             .to("sbe-output", Produced.with(
                 WindowedSerdes.sessionWindowedSerdeFrom(String.class),
-                Serdes.serdeFrom(new TradeAggregateDtoSerializer(), new TradeAggregateDtoDeserializer())
-            ));
+               tradeAggregateDtoSerde)
+            );
     }
 
-    private static void buildFuryTopology(StreamsBuilder builder) {
+    private void buildFuryTopology(StreamsBuilder builder) {
         KStream<String, Stock> trades = builder.stream("fory-input2",
-            Consumed.with(Serdes.String(), 
-                Serdes.serdeFrom(new JacksonRecordSerializer(), new JacksonRecordDeserializer())));
+            Consumed.with(stringSerde, stockSerde));
 
         trades
             .selectKey((key, stock) -> stock.symbol())
-            .groupByKey(Grouped.with(Serdes.String(), 
-                Serdes.serdeFrom(new JacksonRecordSerializer(), new JacksonRecordDeserializer())))
+            .groupByKey(Grouped.with(stringSerde, stockSerde))
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)))
             .aggregate(
                 TradeAggregate::new,
@@ -155,16 +161,18 @@ public class StatefulStreamsRunner {
                     return aggregate;
                 },
                 (key, agg1, agg2) -> TradeAggregate.merge(agg1, agg2),
-                Materialized.as("trade-aggregates-fury")
+                Materialized.<String, TradeAggregate, SessionStore<Bytes, byte[]>>as("trade-aggregates-fury")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(tradeAggregateFurySerde)
             )
             .toStream()
             .to("fury-output", Produced.with(
                 WindowedSerdes.sessionWindowedSerdeFrom(String.class),
-                Serdes.serdeFrom(new TradeAggregateFurySerializer(), new TradeAggregateFuryDeserializer())
-            ));
+                tradeAggregateFurySerde)
+            );
     }
 
-    private static void runStreamsWithMetrics(StreamsBuilder builder, Properties props, 
+    private void runStreamsWithMetrics(StreamsBuilder builder, Properties props,
                                               String format, int durationSeconds) throws Exception {
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
@@ -285,8 +293,6 @@ public class StatefulStreamsRunner {
     private static Properties getStreamsConfig(String format) {
         Properties props = Utils.getProperties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "trade-aggregation-" + format);
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0); 
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10_000);
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");

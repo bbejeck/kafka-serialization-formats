@@ -1,5 +1,8 @@
 package io.confluent.developer.consumer;
 
+import baseline.StockTradeDecoder;
+import io.confluent.developer.Stock;
+import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.serde.ForyDeserializer;
 import io.confluent.developer.serde.JacksonRecordDeserializer;
 import io.confluent.developer.serde.ProtoDeserializer;
@@ -75,17 +78,45 @@ public class ConsumerRunner {
     
     private static void consumeRecords(int numRecords, Properties props, String topic, String type) {
         Instant startTime = Instant.now();
-        int recordCount = 0;
-        int totalBytes = 0;
+        long endRun = Instant.now().plusSeconds(300).toEpochMilli();
+        long recordCount = 0;
+        long totalBytes = 0;
         int pollCount = 0;
 
         try (Consumer<byte[], Object> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(Collections.singletonList(topic));
-            while (recordCount < numRecords) {
-                ConsumerRecords<byte[], Object> records = consumer.poll(Duration.ofMillis(100));
+            while (Instant.now().toEpochMilli() < endRun) {
+                ConsumerRecords<byte[], Object> records = consumer.poll(Duration.ofMillis(5000));
                 pollCount++;
                 for (ConsumerRecord<byte[], Object> consumerRecord : records) {
-                    consumerRecord.value();
+                    Object value = consumerRecord.value();
+                    switch (type) {
+                        case "json" -> {
+                            Stock stock = (Stock) value;
+                            String symbol = stock.symbol();
+                            double price = stock.price();
+                            maybePrintFields(type, symbol, price, recordCount);
+                        }
+                        case "proto" -> {
+                           StockProto protoStock = (StockProto) value;
+                            String symbol = protoStock.getSymbol();
+                            double price = protoStock.getPrice();
+                            maybePrintFields(type, symbol, price, recordCount);
+                        }
+                        case "sbe" -> {
+                            StockTradeDecoder sbeStock = (StockTradeDecoder) value;
+                            String symbol = sbeStock.symbol();
+                            double price = sbeStock.price();
+                            maybePrintFields(type, symbol, price, recordCount);
+                        }
+                        case "fory" -> {
+                            Stock furyStock = (Stock) value;
+                            String symbol = furyStock.symbol();
+                            double price = furyStock.price();
+                            maybePrintFields(type, symbol, price, recordCount);
+                        }
+                    }
+
                     totalBytes += consumerRecord.serializedValueSize();
                     recordCount++;
                 }
@@ -100,8 +131,14 @@ public class ConsumerRunner {
         }
     }
 
+    private static void maybePrintFields(String type, String symbol, double price, long recordCount) {
+        if (recordCount % 100_000 == 0) {
+            System.out.printf("Fields from  %s - %s - %.2f%n", type, symbol, price);
+        }
+    }
+
     private static void printConsumerMetrics(Consumer<?, ?> consumer, String type, 
-                                            int recordCount, int totalBytes, 
+                                            long recordCount, long totalBytes,
                                             long durationMs, int pollCount) {
         Map<MetricName, ? extends Metric> metrics = consumer.metrics();
 

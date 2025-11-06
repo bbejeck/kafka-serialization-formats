@@ -32,7 +32,7 @@ public class ProducerRunner {
     private static final String FORY = "fory";
 
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException{
 
         if (args.length == 0) {
             System.out.println("Usage ProducerRunner json|proto|sbe|fory");
@@ -66,25 +66,29 @@ public class ProducerRunner {
         }
     }
 
-    private static <V> void produceRecords(int numRecords, String type, String topic, Supplier<V> recordSupplier, Properties props) {
-        List<V> records = new ArrayList<>();
-        for (int i = 0; i < numRecords; i++) {
-            records.add(recordSupplier.get());
-        }
+    private static <V> void produceRecords(int numRecords, String type, String topic, Supplier<V> recordSupplier, Properties props) throws InterruptedException{
+        long endRun = Instant.now().plusSeconds(300).toEpochMilli();
         Instant start = Instant.now();
         AtomicInteger counter = new AtomicInteger(1);
         try (Producer<byte[], V> producer = new KafkaProducer<>(props)) {
-            for (V record : records) {
-                producer.send(new ProducerRecord<>(topic, record), (metadata, exception) -> {
-                    if (exception != null) {
-                        System.out.printf("Error producing message %s%n", exception);
-                    }
-                    if (counter.getAndIncrement() % 100_000 == 0) {
-                        System.out.printf("Produced %d records%n", counter.get());
-                    }
-                });
+            while (Instant.now().toEpochMilli() < endRun) {
+                List<V> records = new ArrayList<>();
+                for (int i = 0; i < numRecords; i++) {
+                    records.add(recordSupplier.get());
+                }
+                for (V record : records) {
+                    producer.send(new ProducerRecord<>(topic, record), (metadata, exception) -> {
+                        if (exception != null) {
+                            System.out.printf("Error producing message %s%n", exception);
+                        }
+                        if (counter.getAndIncrement() % 100_000 == 0) {
+                            System.out.printf("Produced %d records%n", counter.get());
+                        }
+                    });
+                }
+                producer.flush();
+                Thread.sleep(250);
             }
-            producer.flush();
             Instant after = Instant.now();
             long durationMs = after.toEpochMilli() - start.toEpochMilli();
             System.out.printf("Producing records for [%s] Took %d milliseconds %n", type, durationMs);

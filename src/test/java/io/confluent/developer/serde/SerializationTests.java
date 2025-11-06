@@ -23,6 +23,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -153,7 +154,7 @@ class SerializationTests {
 
         // Deserialize batch
         @SuppressWarnings("unchecked")
-        java.util.List<Stock> deserializedBatch = (java.util.List<Stock>) fory.deserialize(serializedBatch);
+        List<Stock> deserializedBatch = (List<Stock>) fory.deserialize(serializedBatch);
 
         // Verify all records match
         assertEquals(stockBatch.size(), deserializedBatch.size());
@@ -170,25 +171,23 @@ class SerializationTests {
 
         @Test
     void foryColumnarVsRowOrientedComparison() {
-        // Demonstrate why columnar format is better for batch analytics
         Fory fory = Fory.builder().build();
         fory.register(Stock.class);
         fory.register(io.confluent.developer.Exchange.class);
         fory.register(io.confluent.developer.TxnType.class);
 
         // Create larger batch to show compression benefits
-        java.util.List<Stock> largeBatch = new java.util.ArrayList<>();
+        List<Stock> largeBatch = new ArrayList<>();
         for (int i = 0; i < 1000; i++) {
             largeBatch.add(new Stock(
-                    100.0 + (i % 10),  // Limited price range for better compression
-                    1000L * (i % 5),    // Repeated share amounts
-                    "SYM" + (i % 100),  // Limited symbol variety
-                    io.confluent.developer.Exchange.NASDAQ,  // Same exchange
-                    io.confluent.developer.TxnType.BUY       // Same txn type
+                    100.0 + (i % 10),
+                    1000L * (i % 5),
+                    "SYM" + (i % 100),
+                    io.confluent.developer.Exchange.NASDAQ,
+                    io.confluent.developer.TxnType.BUY
             ));
         }
 
-        // Serialize as batch (columnar-friendly)
         byte[] batchSerialized = fory.serialize(largeBatch);
 
         // Serialize individually (row-oriented)
@@ -205,10 +204,6 @@ class SerializationTests {
         System.out.println("Compression ratio: " + 
                 String.format("%.2f", (double) totalIndividualSize / batchSerialized.length) + "x");
 
-        // Columnar should be significantly smaller due to:
-        // - Column-wise compression
-        // - Eliminated repeated metadata
-        // - Better encoding of similar values
         assertTrue(batchSerialized.length < totalIndividualSize, "Columnar format should be more compact than row-oriented");
     }
 

@@ -2,6 +2,7 @@ package io.confluent.developer.serde;
 
 import io.confluent.developer.TradeAggregate;
 import org.apache.fory.Fory;
+import org.apache.fory.ThreadSafeFory;
 import org.apache.kafka.common.serialization.Serializer;
 
 /**
@@ -10,10 +11,10 @@ import org.apache.kafka.common.serialization.Serializer;
  */
 public class TradeAggregateFurySerializer implements Serializer<TradeAggregate> {
 
-    private final Fory fury;
+    private final ThreadSafeFory fury;
 
     public TradeAggregateFurySerializer() {
-        this.fury = Fory.builder().build();
+        this.fury = Fory.builder().buildThreadSafeFory();
         fury.register(TradeAggregate.class);
     }
 
