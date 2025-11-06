@@ -46,4 +46,9 @@ public class TradeAggregateDtoDeserializer implements Deserializer<TradeAggregat
 
         return dto;
     }
+
+    @Override
+    public void close() {
+        decoderState.remove();
+    }
 }
