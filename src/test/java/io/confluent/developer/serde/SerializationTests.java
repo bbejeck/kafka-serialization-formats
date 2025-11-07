@@ -43,6 +43,7 @@ class SerializationTests {
     private final SbeSerializer sbeSerializer = new SbeSerializer();
     private final JacksonRecordSerializer jacksonRecordSerializer = new JacksonRecordSerializer();
     private final KryoSerializer kryoSerializer = new KryoSerializer();
+    private final ForySerializer forySerializer = new ForySerializer();
     private final double price = 99.99;
     private final int shares = 3_000;
 
@@ -95,10 +96,14 @@ class SerializationTests {
        StockTradeEncoder stockTradeEncoder = sbeRecordSupplier.get();;
        byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
        byte[] kryoBytes =  kryoSerializer.serialize("topic", stock);
+       byte[] foryBytes =  forySerializer.serialize("topic", stock);
        byte[] jacksonBytes = jacksonRecordSerializer.serialize("topic", stock);
+       byte[] protoBytes = stockProto.toByteArray();
 
        assertEquals(26, sbeBytes.length);
        assertEquals(26, kryoBytes.length);
+       assertEquals(21, protoBytes.length);
+       assertEquals(26, foryBytes.length);
        assertEquals(79, jacksonBytes.length);
     }
 
