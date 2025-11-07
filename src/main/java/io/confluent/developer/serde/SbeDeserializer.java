@@ -12,8 +12,18 @@ import org.apache.kafka.common.serialization.Deserializer;
  */
 public class SbeDeserializer implements Deserializer<StockTradeDecoder> {
 
-    private final ThreadLocal<MessageHeaderDecoder> messageHeaderDecoder =
-            ThreadLocal.withInitial(MessageHeaderDecoder::new);
+    private final ThreadLocal<DecoderState> decoderState =
+            ThreadLocal.withInitial(DecoderState::new);
+
+    private static class DecoderState {
+        final MessageHeaderDecoder messageHeaderDecoder;
+        final StockTradeDecoder stockTradeDecoder;
+
+        private DecoderState() {
+            this.messageHeaderDecoder = new MessageHeaderDecoder();
+            this.stockTradeDecoder = new StockTradeDecoder();
+        }
+    }
 
 
     @Override
@@ -22,14 +32,15 @@ public class SbeDeserializer implements Deserializer<StockTradeDecoder> {
             return null;
         }
 
-        StockTradeDecoder stockTradeDecoder = new StockTradeDecoder();
+        DecoderState state = decoderState.get();
+        StockTradeDecoder stockTradeDecoder = state.stockTradeDecoder;
         UnsafeBuffer unsafeBuffer = new UnsafeBuffer(bytes);
-        stockTradeDecoder.wrapAndApplyHeader(unsafeBuffer, 0, messageHeaderDecoder.get());
+        stockTradeDecoder.wrapAndApplyHeader(unsafeBuffer, 0, state.messageHeaderDecoder);
         return stockTradeDecoder;
     }
 
     @Override
     public void close() {
-        messageHeaderDecoder.remove();
+        decoderState.remove();
     }
 }
