@@ -83,7 +83,7 @@ public class StatefulStreamsRunner {
         trades
             .selectKey((key, stock) -> stock.symbol())
             .groupByKey(Grouped.with(stringSerde, stockSerde))
-            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofSeconds(30)))
             .aggregate(
                 TradeAggregate::new,
                 (key, stock, aggregate) -> {
@@ -106,7 +106,7 @@ public class StatefulStreamsRunner {
         trades
             .selectKey((key, stock) -> stock.symbol())
             .groupByKey(Grouped.with(stringSerde, stockSerde))
-            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofSeconds(30)))
             .aggregate(
                 TradeAggregateDto::new,
                 (key, stock, aggregate) -> {
@@ -153,7 +153,7 @@ public class StatefulStreamsRunner {
         trades
             .selectKey((key, stock) -> stock.symbol())
             .groupByKey(Grouped.with(stringSerde, stockSerde))
-            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofSeconds(30)))
             .aggregate(
                 TradeAggregate::new,
                 (key, stock, aggregate) -> {
