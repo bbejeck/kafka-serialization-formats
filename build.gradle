@@ -8,6 +8,7 @@ plugins {
     id 'java'
     id "com.google.protobuf" version "0.9.5"
     id 'com.gradleup.shadow' version '9.2.2'
+    id 'io.github.martinsjavacode.avro-gradle-plugin' version '1.1.0'
 }
 
 group = 'io.confluent.developer'
@@ -214,7 +215,7 @@ dependencies {
     implementation 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
     annotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
     implementation 'com.google.protobuf:protobuf-java:4.33.0'
-    implementation 'uk.co.real-logic:sbe-all:1.36.0'
+    implementation 'uk.co.real-logic:sbe-all:1.36.1'
     implementation 'com.esotericsoftware:kryo:5.6.2'
     implementation 'org.apache.fory:fory-core:0.13.0'
     implementation 'org.capnproto:runtime:0.1.16'
