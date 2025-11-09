@@ -1,6 +1,0 @@
-{
-  "namespace": "io.confluent.developer.avro",
-  "type": "enum",
-  "name": "Exchange",
-  "symbols": ["NYSE", "NASDAQ"]
-}

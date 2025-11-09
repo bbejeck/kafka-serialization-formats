@@ -1,6 +1,0 @@
-{
-  "namespace": "io.confluent.developer.avro",
-  "type": "enum",
-  "name": "TxnType",
-  "symbols": ["BUY", "SELL"]
-}
