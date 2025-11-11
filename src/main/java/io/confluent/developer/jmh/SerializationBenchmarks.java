@@ -11,8 +11,11 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import io.confluent.developer.Stock;
 import io.confluent.developer.StockTradeCapnp;
 import io.confluent.developer.TxnType;
+import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.proto.Exchange;
 import io.confluent.developer.proto.StockProto;
+import io.confluent.developer.serde.AvroDeserializer;
+import io.confluent.developer.serde.AvroSerializer;
 import io.confluent.developer.serde.KryoDeserializer;
 import io.confluent.developer.serde.KryoSerializer;
 import io.confluent.developer.serde.SbeDeserializer;
@@ -117,6 +120,22 @@ public class SerializationBenchmarks {
         public void tearDown() {
             if (kryoSerializer != null) kryoSerializer.close();
             if (kryoDeserializer != null) kryoDeserializer.close();
+        }
+    }
+
+    @State(Scope.Benchmark)
+    public static class AvroState {
+        AvroSerializer avroSerializer;
+        AvroDeserializer avroDeserializer;
+        StockAvro stockAvro;
+        byte[] serializedStock;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            avroSerializer = new AvroSerializer();
+            avroDeserializer = new AvroDeserializer();
+            stockAvro = new StockAvro(100.00, 10_000, "CFLT", io.confluent.developer.avro.Exchange.NASDAQ, io.confluent.developer.avro.TxnType.BUY);
+            serializedStock = avroSerializer.serialize("topic", stockAvro);
         }
     }
 
@@ -252,6 +271,19 @@ public class SerializationBenchmarks {
             deserializationBuffer = ByteBuffer.wrap(serializedCapnp);
             serializationBuffer.clear();
         }
+    }
+
+    // ==================== Avro Benchmarks ====================
+    @Benchmark
+    public void measureAvroSerialization(AvroState state, Blackhole blackhole) {
+        byte[] result = state.avroSerializer.serialize("topic", state.stockAvro);
+        blackhole.consume(result);
+    }
+
+    @Benchmark
+    public void measureAvroDeserialization(AvroState state, Blackhole blackhole) {
+        StockAvro result = state.avroDeserializer.deserialize("topic", state.serializedStock);
+        blackhole.consume(result);
     }
 
     // ==================== Fory Benchmarks ====================

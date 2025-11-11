@@ -7,6 +7,7 @@ import baseline.StockTradeEncoder;
 import baseline.TxnType;
 import io.confluent.developer.Stock;
 import io.confluent.developer.StockTradeCapnp;
+import io.confluent.developer.avro.StockAvro;
 import io.confluent.developer.proto.StockProto;
 import io.confluent.developer.supplier.SbeRecordSupplier;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -39,11 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SerializationTests {
 
     private final SbeRecordSupplier sbeRecordSupplier = new SbeRecordSupplier();
-    private final SbeDeserializer sbeNonDirectDeserializer = new SbeDeserializer();
+    private final SbeDeserializer sbeDeserializer = new SbeDeserializer();
     private final SbeSerializer sbeSerializer = new SbeSerializer();
     private final JacksonRecordSerializer jacksonRecordSerializer = new JacksonRecordSerializer();
     private final KryoSerializer kryoSerializer = new KryoSerializer();
     private final ForySerializer forySerializer = new ForySerializer();
+    private final AvroSerializer avroSerializer = new AvroSerializer();
+    private final AvroDeserializer avroDeserializer = new AvroDeserializer();
     private final double price = 99.99;
     private final int shares = 3_000;
 
@@ -114,7 +117,7 @@ class SerializationTests {
         byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
         assertEquals(26,sbeBytes.length);
 
-        StockTradeDecoder stockTradeDecoder = sbeNonDirectDeserializer.deserialize("topic", sbeBytes);
+        StockTradeDecoder stockTradeDecoder = sbeDeserializer.deserialize("topic", sbeBytes);
         assertEquals(Exchange.NASDAQ, stockTradeDecoder.exchange());
         assertEquals(shares, stockTradeDecoder.shares());
         assertEquals(price, stockTradeDecoder.price());
@@ -129,12 +132,32 @@ class SerializationTests {
         byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
         assertEquals(26,sbeBytes.length);
 
-        StockTradeDecoder stockTradeDecoder = sbeNonDirectDeserializer.deserialize("topic", sbeBytes);
+        StockTradeDecoder stockTradeDecoder = sbeDeserializer.deserialize("topic", sbeBytes);
         assertEquals(Double.MAX_VALUE, stockTradeDecoder.price());
         assertEquals(Integer.MAX_VALUE, stockTradeDecoder.shares());
         assertEquals("CFLT", stockTradeDecoder.symbol());
         assertEquals(Exchange.NASDAQ, stockTradeDecoder.exchange());
         assertEquals(TxnType.BUY, stockTradeDecoder.txnType());
+    }
+
+    @Test
+    void avroRoundTripTest() {
+        String symbol = "CFLT";
+        StockAvro stockAvro = StockAvro.newBuilder()
+                .setPrice(100.0)
+                .setShares(100)
+                .setSymbol(symbol)
+                .setExchange(io.confluent.developer.avro.Exchange.NASDAQ)
+                .setType(io.confluent.developer.avro.TxnType.BUY)
+                .build();
+      byte[] avroBytes = avroSerializer.serialize("topic", stockAvro);
+      StockAvro deserializedAvro = avroDeserializer.deserialize("topic", avroBytes);
+
+      assertEquals(stockAvro.getPrice(), deserializedAvro.getPrice());
+      assertEquals(stockAvro.getShares(), deserializedAvro.getShares());
+      assertEquals(stockAvro.getSymbol(), deserializedAvro.getSymbol());
+      assertEquals(stockAvro.getExchange(), deserializedAvro.getExchange());
+      assertEquals(stockAvro.getType(), deserializedAvro.getType());
     }
 
     @Test
@@ -270,7 +293,7 @@ class SerializationTests {
         StockTradeEncoder stockTradeEncoder = stockTradeEncoder(price, shares, byteBuffer);
         byte[] sbeBytes =  sbeSerializer.serialize("topic", stockTradeEncoder);
         assertEquals(26, sbeBytes.length);
-        StockTradeDecoder stockTradeDecoder = sbeNonDirectDeserializer.deserialize("topic", sbeBytes);
+        StockTradeDecoder stockTradeDecoder = sbeDeserializer.deserialize("topic", sbeBytes);
         assertEquals(price, stockTradeDecoder.price());
         assertEquals(shares, stockTradeDecoder.shares());
         assertEquals("CFLT", stockTradeDecoder.symbol());

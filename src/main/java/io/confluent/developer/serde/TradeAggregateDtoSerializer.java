@@ -26,7 +26,7 @@ public class TradeAggregateDtoSerializer implements Serializer<TradeAggregateDto
         final TradeAggregateEncoder encoder;
 
         private EncoderState() {
-            this.byteBuffer = ByteBuffer.allocate(
+            this.byteBuffer = ByteBuffer.allocateDirect(
                 TradeAggregateEncoder.BLOCK_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH
             );
             this.unsafeBuffer = new UnsafeBuffer(byteBuffer);
