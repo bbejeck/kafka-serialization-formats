@@ -24,6 +24,7 @@ public class TradeAggregateDtoSerializer implements Serializer<TradeAggregateDto
         final UnsafeBuffer unsafeBuffer;
         final MessageHeaderEncoder messageHeaderEncoder;
         final TradeAggregateEncoder encoder;
+        final int headerLength;
 
         private EncoderState() {
             this.byteBuffer = ByteBuffer.allocateDirect(
@@ -32,6 +33,8 @@ public class TradeAggregateDtoSerializer implements Serializer<TradeAggregateDto
             this.unsafeBuffer = new UnsafeBuffer(byteBuffer);
             this.messageHeaderEncoder = new MessageHeaderEncoder();
             this.encoder = new TradeAggregateEncoder();
+            encoder.wrapAndApplyHeader(unsafeBuffer, 0, messageHeaderEncoder);
+            this.headerLength = messageHeaderEncoder.encodedLength();
         }
     }
 
@@ -42,9 +45,7 @@ public class TradeAggregateDtoSerializer implements Serializer<TradeAggregateDto
         }
 
         EncoderState state = encoderState.get();
-        state.byteBuffer.clear();
-
-        state.encoder.wrapAndApplyHeader(state.unsafeBuffer, 0, state.messageHeaderEncoder);
+        state.encoder.wrap(state.unsafeBuffer, MessageHeaderEncoder.ENCODED_LENGTH);
 
         state.encoder.totalVolume(dto.totalVolume());
         state.encoder.volumeWeightedPrice(dto.volumeWeightedPrice());
