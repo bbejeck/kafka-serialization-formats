@@ -30,6 +30,7 @@ public class ProducerRunner {
     private static final String PROTO = "proto";
     private static final String SBE = "sbe";
     private static final String FORY = "fory";
+    private static final int SECONDS_TO_RUN = 600;
 
 
     public static void main(String[] args) throws InterruptedException{
@@ -67,7 +68,7 @@ public class ProducerRunner {
     }
 
     private static <V> void produceRecords(int numRecords, String type, String topic, Supplier<V> recordSupplier, Properties props) throws InterruptedException{
-        long endRun = Instant.now().plusSeconds(300).toEpochMilli();
+        long endRun = Instant.now().plusSeconds(SECONDS_TO_RUN).toEpochMilli();
         Instant start = Instant.now();
         AtomicInteger counter = new AtomicInteger(1);
         try (Producer<byte[], V> producer = new KafkaProducer<>(props)) {
@@ -91,9 +92,6 @@ public class ProducerRunner {
             }
             Instant after = Instant.now();
             long durationMs = after.toEpochMilli() - start.toEpochMilli();
-            System.out.printf("Producing records for [%s] Took %d milliseconds %n", type, durationMs);
-
-            // Collect and print JMX metrics
             printProducerMetrics(producer, type, numRecords, durationMs);
         }
     }

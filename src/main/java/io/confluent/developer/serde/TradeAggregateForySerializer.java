@@ -9,11 +9,11 @@ import org.apache.kafka.common.serialization.Serializer;
  * Fury serializer for TradeAggregate.
  * Used in Kafka Streams to demonstrate Fury serialization performance in state stores.
  */
-public class TradeAggregateFurySerializer implements Serializer<TradeAggregate> {
+public class TradeAggregateForySerializer implements Serializer<TradeAggregate> {
 
     private final ThreadSafeFory fury;
 
-    public TradeAggregateFurySerializer() {
+    public TradeAggregateForySerializer() {
         this.fury = Fory.builder().buildThreadSafeFory();
         fury.register(TradeAggregate.class);
     }

@@ -1,12 +1,15 @@
 package io.confluent.developer.streams;
 
+import baseline.StockTradeDto;
 import baseline.TradeAggregateDto;
 import io.confluent.developer.Stock;
 import io.confluent.developer.TradeAggregate;
 import io.confluent.developer.serde.*;
 import io.confluent.developer.util.Utils;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -15,16 +18,12 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.WindowStore;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -41,9 +40,11 @@ public class StatefulStreamsRunner {
 
     private static final String JSON = "json";
     private static final String SBE = "sbe";
-    private static final String FURY = "fury";
+    private static final String FORY = "fory";
     private final Serde<TradeAggregateDto> tradeAggregateDtoSerde = Serdes.serdeFrom(new TradeAggregateDtoSerializer(), new TradeAggregateDtoDeserializer());
-    private final Serde<TradeAggregate> tradeAggregateFurySerde = Serdes.serdeFrom(new TradeAggregateFurySerializer(), new TradeAggregateFuryDeserializer());
+    private final Serde<StockTradeDto> stockTradeDtoSerde = Serdes.serdeFrom(new StockTradeDtoSerializer(), new StockTradeDtoDeserializer());
+    private final Serde<Stock> foryStockSerde = Serdes.serdeFrom(new ForySerializer(), new ForyDeserializer());
+    private final Serde<TradeAggregate> tradeAggregateForySerde = Serdes.serdeFrom(new TradeAggregateForySerializer(), new TradeAggregateForyDeserializer());
     private final Serde<TradeAggregate> tradeAggregateJsonSerde = Serdes.serdeFrom(new TradeAggregateJsonSerializer(), new TradeAggregateJsonDeserializer());
     private final Serde<Stock> stockSerde = Serdes.serdeFrom(new JacksonRecordSerializer(), new JacksonRecordDeserializer());
     private final Serde<String> stringSerde = Serdes.String();
@@ -52,7 +53,7 @@ public class StatefulStreamsRunner {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
-            System.out.println("Usage: StatefulStreamsRunner <json|sbe|fury> <durationSeconds>");
+            System.out.println("Usage: StatefulStreamsRunner <json|sbe|fory> <durationSeconds>");
             System.exit(1);
         }
 
@@ -66,7 +67,7 @@ public class StatefulStreamsRunner {
         switch (format) {
             case JSON -> runner.buildJsonTopology(builder);
             case SBE -> runner.buildSbeTopology(builder);
-            case FURY -> runner.buildFuryTopology(builder);
+            case FORY -> runner.buildForyTopology(builder);
             default -> {
                 System.out.println("Invalid format: " + format);
                 System.exit(1);
@@ -78,7 +79,7 @@ public class StatefulStreamsRunner {
 
     private void buildJsonTopology(StreamsBuilder builder) {
         KStream<String, Stock> trades = builder.stream("json-input",
-            Consumed.with(stringSerde, stockSerde));
+                Consumed.with(stringSerde, stockSerde));
 
         trades
             .selectKey((key, stock) -> stock.symbol())
@@ -91,7 +92,9 @@ public class StatefulStreamsRunner {
                     return aggregate;
                 },
                 (key, agg1, agg2) -> TradeAggregate.merge(agg1, agg2),
-                Materialized.as("trade-aggregates-json")
+                    Materialized.<String, TradeAggregate, SessionStore<Bytes, byte[]>>as("trade-aggregates-json")
+                            .withKeySerde(stringSerde)
+                            .withValueSerde(tradeAggregateJsonSerde)
             )
             .toStream()
             .to("json-output", Produced.with(
@@ -100,12 +103,12 @@ public class StatefulStreamsRunner {
     }
 
     private void buildSbeTopology(StreamsBuilder builder) {
-        KStream<String, Stock> trades = builder.stream("sbe-input",
-            Consumed.with(stringSerde, stockSerde));
+        KStream<String, StockTradeDto> trades = builder.stream("sbe-input",
+                Consumed.with(stringSerde, stockTradeDtoSerde));
 
         trades
             .selectKey((key, stock) -> stock.symbol())
-            .groupByKey(Grouped.with(stringSerde, stockSerde))
+            .groupByKey(Grouped.with(stringSerde, stockTradeDtoSerde))
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofSeconds(30)))
             .aggregate(
                 TradeAggregateDto::new,
@@ -146,13 +149,13 @@ public class StatefulStreamsRunner {
             );
     }
 
-    private void buildFuryTopology(StreamsBuilder builder) {
+    private void buildForyTopology(StreamsBuilder builder) {
         KStream<String, Stock> trades = builder.stream("fory-input2",
-            Consumed.with(stringSerde, stockSerde));
+                Consumed.with(stringSerde, foryStockSerde));
 
         trades
             .selectKey((key, stock) -> stock.symbol())
-            .groupByKey(Grouped.with(stringSerde, stockSerde))
+            .groupByKey(Grouped.with(stringSerde, foryStockSerde))
             .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofSeconds(30)))
             .aggregate(
                 TradeAggregate::new,
@@ -163,97 +166,34 @@ public class StatefulStreamsRunner {
                 (key, agg1, agg2) -> TradeAggregate.merge(agg1, agg2),
                 Materialized.<String, TradeAggregate, SessionStore<Bytes, byte[]>>as("trade-aggregates-fury")
                     .withKeySerde(Serdes.String())
-                    .withValueSerde(tradeAggregateFurySerde)
+                    .withValueSerde(tradeAggregateForySerde)
             )
             .toStream()
-            .to("fury-output", Produced.with(
+            .to("fory-output", Produced.with(
                 WindowedSerdes.sessionWindowedSerdeFrom(String.class),
-                tradeAggregateFurySerde)
+                    tradeAggregateForySerde)
             );
     }
 
     private void runStreamsWithMetrics(StreamsBuilder builder, Properties props,
-                                              String format, int durationSeconds) throws Exception {
+                                       String format, int durationSeconds) throws Exception {
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);
 
-        ScheduledExecutorService metricsExecutor = Executors.newSingleThreadScheduledExecutor();
 
         startTime = Instant.now();
-
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             streams.close(Duration.ofSeconds(10));
-            metricsExecutor.shutdown();
             latch.countDown();
         }));
 
-        // Print metrics every 5 seconds
-        metricsExecutor.scheduleAtFixedRate(() -> {
-            printMetrics(streams, format);
-        }, 5, 5, TimeUnit.SECONDS);
-
-        // Automatic shutdown after duration
-        metricsExecutor.schedule(() -> {
-            System.out.println("\n=== FINAL METRICS ===");
-            printMetrics(streams, format);
-            printSummary(streams, format);
-            streams.close();
-            latch.countDown();
-        }, durationSeconds, TimeUnit.SECONDS);
-
-        try {
-            streams.start();
-            latch.await();
-        } finally {
-            metricsExecutor.shutdown();
-        }
+        streams.start();
+        latch.await(durationSeconds, TimeUnit.SECONDS);
+        printMetricsSummary(streams, format);
+        streams.close(Duration.ofSeconds(10));
     }
 
-    private static void printMetrics(KafkaStreams streams, String format) {
-        Map<MetricName, ? extends Metric> metrics = streams.metrics();
-
-        long now = System.currentTimeMillis();
-        long runtimeMs = now - startTime.toEpochMilli();
-
-        System.out.printf("\n=== [%s] Metrics at %d seconds ===%n", format.toUpperCase(), runtimeMs / 1000);
-
-        double processRate = getMetricValue(metrics, "process-rate");
-        double processLatencyAvg = getMetricValue(metrics, "process-latency-avg");
-        double processLatencyMax = getMetricValue(metrics, "process-latency-max");
-
-        // State store metrics - KEY for serialization performance
-        double putRate = getMetricValue(metrics, "put-rate");
-        double putLatencyAvg = getMetricValue(metrics, "put-latency-avg");
-        double getRate = getMetricValue(metrics, "get-rate");
-        double getLatencyAvg = getMetricValue(metrics, "get-latency-avg");
-
-        double commitRate = getMetricValue(metrics, "commit-rate");
-        double commitLatencyAvg = getMetricValue(metrics, "commit-latency-avg");
-
-        double recordsProcessedTotal = getMetricValue(metrics, "process-total");
-
-        System.out.printf("  Processing Rate: %.2f records/sec%n", processRate);
-        System.out.printf("  Process Latency: avg=%.2fms, max=%.2fms%n", 
-            processLatencyAvg, processLatencyMax);
-        System.out.printf("  Total Processed: %.0f records%n", recordsProcessedTotal);
-        System.out.println();
-
-        System.out.printf("  State Store PUT: rate=%.2f ops/sec, latency=%.2fms  ← SERIALIZATION%n", 
-            putRate, putLatencyAvg);
-        System.out.printf("  State Store GET: rate=%.2f ops/sec, latency=%.2fms  ← DESERIALIZATION%n", 
-            getRate, getLatencyAvg);
-        System.out.println();
-
-        System.out.printf("  Commit Rate: %.2f commits/sec, latency=%.2fms%n", 
-            commitRate, commitLatencyAvg);
-
-        if (runtimeMs > 0) {
-            double throughput = (recordsProcessedTotal / runtimeMs) * 1000;
-            System.out.printf("  Overall Throughput: %.2f records/sec%n", throughput);
-        }
-    }
-
-    private static void printSummary(KafkaStreams streams, String format) {
+    private static void printMetricsSummary(KafkaStreams streams, String format) {
         Map<MetricName, ? extends Metric> metrics = streams.metrics();
         long runtimeMs = System.currentTimeMillis() - startTime.toEpochMilli();
 
@@ -265,7 +205,7 @@ public class StatefulStreamsRunner {
         double throughput = (totalRecords / runtimeMs) * 1000;
 
         System.out.println("\n╔═══════════════════════════════════════════════════╗");
-        System.out.printf("║ FINAL SUMMARY - %s%n", format.toUpperCase());
+        System.out.printf("║ Streams Metrics SUMMARY - %s%n", format.toUpperCase());
         System.out.println("╠═══════════════════════════════════════════════════╣");
         System.out.printf("║ Runtime:              %d seconds%n", runtimeMs / 1000);
         System.out.printf("║ Total Records:        %.0f%n", totalRecords);
@@ -278,25 +218,28 @@ public class StatefulStreamsRunner {
 
     private static double getMetricValue(Map<MetricName, ? extends Metric> metrics, String metricName) {
         return metrics.entrySet().stream()
-            .filter(entry -> entry.getKey().name().equals(metricName))
-            .findFirst()
-            .map(entry -> {
-                Object value = entry.getValue().metricValue();
-                if (value instanceof Number) {
-                    return ((Number) value).doubleValue();
-                }
-                return 0.0;
-            })
-            .orElse(0.0);
+                .filter(entry -> entry.getKey().name().equals(metricName))
+                .findFirst()
+                .map(entry -> {
+                    Object value = entry.getValue().metricValue();
+                    if (value instanceof Number) {
+                        return ((Number) value).doubleValue();
+                    }
+                    return 0.0;
+                })
+                .orElse(0.0);
     }
 
     private static Properties getStreamsConfig(String format) {
         Properties props = Utils.getProperties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "trade-aggregation-" + format);
-        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0); 
+        String uuid = Uuid.randomUuid().toString();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "trade-aggregation-" + format + "-" + uuid);
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10_000);
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
-
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "latest");
         return props;
     }
 }

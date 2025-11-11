@@ -3,6 +3,7 @@ package io.confluent.developer.serde;
 import baseline.Exchange;
 import baseline.MessageHeaderEncoder;
 import baseline.StockTradeDecoder;
+import baseline.StockTradeDto;
 import baseline.StockTradeEncoder;
 import baseline.TxnType;
 import io.confluent.developer.Stock;
@@ -47,6 +48,8 @@ class SerializationTests {
     private final ForySerializer forySerializer = new ForySerializer();
     private final AvroSerializer avroSerializer = new AvroSerializer();
     private final AvroDeserializer avroDeserializer = new AvroDeserializer();
+    private final StockTradeDtoDeserializer stockTradeDtoDeserializer = new StockTradeDtoDeserializer();
+    private final StockTradeDtoSerializer stockTradeDtoSerializer = new StockTradeDtoSerializer();
     private final double price = 99.99;
     private final int shares = 3_000;
 
@@ -138,6 +141,24 @@ class SerializationTests {
         assertEquals("CFLT", stockTradeDecoder.symbol());
         assertEquals(Exchange.NASDAQ, stockTradeDecoder.exchange());
         assertEquals(TxnType.BUY, stockTradeDecoder.txnType());
+    }
+
+    @Test
+    void sbeStockTradeDtoRoundTripTest() {
+        StockTradeDto stockTradeDto = new StockTradeDto();
+        stockTradeDto.price(Double.MAX_VALUE);
+        stockTradeDto.shares(Integer.MAX_VALUE);
+        stockTradeDto.symbol("CFLT");
+        stockTradeDto.exchange(Exchange.NASDAQ);
+        stockTradeDto.txnType(TxnType.BUY);
+
+        byte[] sbeBytes = stockTradeDtoSerializer.serialize("topic", stockTradeDto);
+        StockTradeDto deserializedStockTradeDto = stockTradeDtoDeserializer.deserialize("topic", sbeBytes);
+        assertEquals(Double.MAX_VALUE, deserializedStockTradeDto.price());
+        assertEquals(Integer.MAX_VALUE, deserializedStockTradeDto.shares());
+        assertEquals("CFLT", deserializedStockTradeDto.symbol());
+        assertEquals(Exchange.NASDAQ, deserializedStockTradeDto.exchange());
+        assertEquals(TxnType.BUY, deserializedStockTradeDto.txnType());
     }
 
     @Test

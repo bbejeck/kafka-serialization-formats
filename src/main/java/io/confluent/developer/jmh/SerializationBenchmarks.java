@@ -3,8 +3,8 @@ package io.confluent.developer.jmh;
 
 import baseline.MessageHeaderEncoder;
 import baseline.StockTradeDecoder;
+import baseline.StockTradeDto;
 import baseline.StockTradeEncoder;
-import baseline.TradeAggregateDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -20,8 +20,8 @@ import io.confluent.developer.serde.KryoDeserializer;
 import io.confluent.developer.serde.KryoSerializer;
 import io.confluent.developer.serde.SbeDeserializer;
 import io.confluent.developer.serde.SbeSerializer;
-import io.confluent.developer.serde.TradeAggregateDtoDeserializer;
-import io.confluent.developer.serde.TradeAggregateDtoSerializer;
+import io.confluent.developer.serde.StockTradeDtoDeserializer;
+import io.confluent.developer.serde.StockTradeDtoSerializer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.apache.fory.Fory;
 import org.capnproto.ArrayOutputStream;
@@ -219,25 +219,25 @@ public class SerializationBenchmarks {
     }
 
     @State(Scope.Benchmark)
-    public static class TradeAggregateDtoState {
-        baseline.TradeAggregateDto tradeAggregateDto;
+    public static class StockTradeDtoState {
+        baseline.StockTradeDto stockTradeDto;
         byte[] serializedDto;
-        TradeAggregateDtoSerializer dtoSerializer;
-        TradeAggregateDtoDeserializer dtoDeserializer;
+        StockTradeDtoSerializer dtoSerializer;
+        StockTradeDtoDeserializer dtoDeserializer;
 
         @Setup(Level.Trial)
         public void setUp() {
-            dtoSerializer = new TradeAggregateDtoSerializer();
-            dtoDeserializer = new TradeAggregateDtoDeserializer();
+            dtoSerializer = new StockTradeDtoSerializer();
+            dtoDeserializer = new StockTradeDtoDeserializer();
 
-            tradeAggregateDto = new baseline.TradeAggregateDto();
-            tradeAggregateDto.totalVolume(5_000_000.0);
-            tradeAggregateDto.volumeWeightedPrice(250.75);
-            tradeAggregateDto.tradeCount(500);
-            tradeAggregateDto.minPrice(245.50);
-            tradeAggregateDto.maxPrice(255.00);
+            stockTradeDto = new baseline.StockTradeDto();
+            stockTradeDto.price(PRICE);
+            stockTradeDto.shares(SHARES);
+            stockTradeDto.symbol(SYMBOL);
+            stockTradeDto.exchange(baseline.Exchange.NASDAQ);
+            stockTradeDto.txnType(baseline.TxnType.BUY);
 
-            serializedDto = dtoSerializer.serialize("topic", tradeAggregateDto);
+            serializedDto = dtoSerializer.serialize("topic", stockTradeDto);
         }
     }
 
@@ -351,14 +351,14 @@ public class SerializationBenchmarks {
     // ==================== SBE TradeAggregateDto Benchmarks ====================
 
     @Benchmark
-    public void measureTradeAggregateDtoSerialization(TradeAggregateDtoState state, Blackhole blackhole) {
-        byte[] results = state.dtoSerializer.serialize("topic", state.tradeAggregateDto);
+    public void measureStockTradeDtoSerialization(StockTradeDtoState state, Blackhole blackhole) {
+        byte[] results = state.dtoSerializer.serialize("topic", state.stockTradeDto);
         blackhole.consume(results);
     }
 
     @Benchmark
-    public void measureTradeAggregateDtoDeserialization(TradeAggregateDtoState state, Blackhole blackhole) {
-        TradeAggregateDto result = state.dtoDeserializer.deserialize("topic", state.serializedDto);
+    public void measureStockTradeDtoDeserialization(StockTradeDtoState state, Blackhole blackhole) {
+        StockTradeDto result = state.dtoDeserializer.deserialize("topic", state.serializedDto);
         blackhole.consume(result);
     }
 

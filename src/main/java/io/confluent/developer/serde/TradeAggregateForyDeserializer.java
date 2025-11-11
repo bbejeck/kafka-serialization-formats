@@ -7,13 +7,13 @@ import org.apache.kafka.common.serialization.Deserializer;
 
 /**
  * Fury deserializer for TradeAggregate.
- * Used in Kafka Streams to demonstrate Fury deserialization performance in state stores.
+ * Used in Kafka Streams to demonstrate Fory deserialization performance in state stores.
  */
-public class TradeAggregateFuryDeserializer implements Deserializer<TradeAggregate> {
+public class TradeAggregateForyDeserializer implements Deserializer<TradeAggregate> {
 
     private final ThreadSafeFory fury;
 
-    public TradeAggregateFuryDeserializer() {
+    public TradeAggregateForyDeserializer() {
         this.fury = Fory.builder().buildThreadSafeFory();
         fury.register(TradeAggregate.class);
     }
