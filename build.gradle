@@ -226,6 +226,7 @@ dependencies {
     implementation 'org.apache.fory:fory-core:0.13.0'
     implementation 'org.apache.avro:avro:1.12.1'
     implementation 'org.capnproto:runtime:0.1.16'
+    implementation 'io.micrometer:micrometer-core:1.16.0'
 
     implementation 'org.slf4j:slf4j-simple:2.0.17'
 

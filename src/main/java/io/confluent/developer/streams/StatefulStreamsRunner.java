@@ -4,8 +4,16 @@ import baseline.StockTradeDto;
 import baseline.TradeAggregateDto;
 import io.confluent.developer.Stock;
 import io.confluent.developer.TradeAggregate;
+import io.confluent.developer.proto.StockProto;
+import io.confluent.developer.proto.TradeAggregateProto;
 import io.confluent.developer.serde.*;
 import io.confluent.developer.util.Utils;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tag;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.kafka.KafkaStreamsMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -21,6 +29,8 @@ import org.apache.kafka.streams.state.SessionStore;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -41,19 +51,22 @@ public class StatefulStreamsRunner {
     private static final String JSON = "json";
     private static final String SBE = "sbe";
     private static final String FORY = "fory";
+    private static final String PROTO = "proto";
     private final Serde<TradeAggregateDto> tradeAggregateDtoSerde = Serdes.serdeFrom(new TradeAggregateDtoSerializer(), new TradeAggregateDtoDeserializer());
     private final Serde<StockTradeDto> stockTradeDtoSerde = Serdes.serdeFrom(new StockTradeDtoSerializer(), new StockTradeDtoDeserializer());
     private final Serde<Stock> foryStockSerde = Serdes.serdeFrom(new ForySerializer(), new ForyDeserializer());
     private final Serde<TradeAggregate> tradeAggregateForySerde = Serdes.serdeFrom(new TradeAggregateForySerializer(), new TradeAggregateForyDeserializer());
     private final Serde<TradeAggregate> tradeAggregateJsonSerde = Serdes.serdeFrom(new TradeAggregateJsonSerializer(), new TradeAggregateJsonDeserializer());
     private final Serde<Stock> stockSerde = Serdes.serdeFrom(new JacksonRecordSerializer(), new JacksonRecordDeserializer());
+    private final Serde<StockProto> stockProtoSerde = Serdes.serdeFrom(new ProtoSerializer(), new ProtoDeserializer());
+    private final Serde<TradeAggregateProto> tradeAggregateProtoSerde = Serdes.serdeFrom(new TradeAggregateProtoSerializer(), new TradeAggregateProtoDeserializer());
     private final Serde<String> stringSerde = Serdes.String();
 
     private static Instant startTime;
 
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
-            System.out.println("Usage: StatefulStreamsRunner <json|sbe|fory> <durationSeconds>");
+            System.out.println("Usage: StatefulStreamsRunner <json|sbe|fory|proto> <durationSeconds>");
             System.exit(1);
         }
 
@@ -68,6 +81,7 @@ public class StatefulStreamsRunner {
             case JSON -> runner.buildJsonTopology(builder);
             case SBE -> runner.buildSbeTopology(builder);
             case FORY -> runner.buildForyTopology(builder);
+            case PROTO -> runner.buildProtoTopology(builder);
             default -> {
                 System.out.println("Invalid format: " + format);
                 System.exit(1);
@@ -175,6 +189,63 @@ public class StatefulStreamsRunner {
             );
     }
 
+    private void buildProtoTopology(StreamsBuilder builder) {
+        KStream<String, StockProto> trades = builder.stream("proto-input",
+                Consumed.with(stringSerde, stockProtoSerde));
+
+        trades
+            .selectKey((key, stock) -> stock.getSymbol())
+            .groupByKey(Grouped.with(stringSerde, stockProtoSerde))
+            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofSeconds(30)))
+            .aggregate(
+                () -> TradeAggregateProto.newBuilder()
+                    .setTotalVolume(0.0)
+                    .setVolumeWeightedPrice(0.0)
+                    .setTradeCount(0)
+                    .setMinPrice(Double.MAX_VALUE)
+                    .setMaxPrice(Double.MIN_VALUE)
+                    .build(),
+                (key, stock, aggregate) -> {
+                    // Update aggregate with new trade
+                    double newTotalVolume = aggregate.getTotalVolume() + (stock.getShares() * stock.getPrice());
+                    long newCount = aggregate.getTradeCount() + 1;
+                    double newVwap = (aggregate.getVolumeWeightedPrice() * aggregate.getTradeCount() + stock.getPrice()) / newCount;
+                    double newMin = newCount == 1 ? stock.getPrice() : Math.min(aggregate.getMinPrice(), stock.getPrice());
+                    double newMax = newCount == 1 ? stock.getPrice() : Math.max(aggregate.getMaxPrice(), stock.getPrice());
+
+                    return TradeAggregateProto.newBuilder()
+                        .setTotalVolume(newTotalVolume)
+                        .setVolumeWeightedPrice(newVwap)
+                        .setTradeCount(newCount)
+                        .setMinPrice(newMin)
+                        .setMaxPrice(newMax)
+                        .build();
+                },
+                (key, agg1, agg2) -> {
+                    // Merge two aggregates
+                    long totalCount = agg1.getTradeCount() + agg2.getTradeCount();
+                    double mergedVwap = (agg1.getVolumeWeightedPrice() * agg1.getTradeCount() + 
+                                       agg2.getVolumeWeightedPrice() * agg2.getTradeCount()) / totalCount;
+
+                    return TradeAggregateProto.newBuilder()
+                        .setTotalVolume(agg1.getTotalVolume() + agg2.getTotalVolume())
+                        .setVolumeWeightedPrice(mergedVwap)
+                        .setTradeCount(totalCount)
+                        .setMinPrice(Math.min(agg1.getMinPrice(), agg2.getMinPrice()))
+                        .setMaxPrice(Math.max(agg1.getMaxPrice(), agg2.getMaxPrice()))
+                        .build();
+                },
+                Materialized.<String, TradeAggregateProto, SessionStore<Bytes, byte[]>>as("trade-aggregates-proto")
+                    .withKeySerde(stringSerde)
+                    .withValueSerde(tradeAggregateProtoSerde)
+            )
+            .toStream()
+            .to("proto-output", Produced.with(
+                WindowedSerdes.sessionWindowedSerdeFrom(String.class),
+                tradeAggregateProtoSerde)
+            );
+    }
+
     private void runStreamsWithMetrics(StreamsBuilder builder, Properties props,
                                        String format, int durationSeconds) throws Exception {
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
@@ -201,6 +272,9 @@ public class StatefulStreamsRunner {
         double avgProcessLatency = getMetricValue(metrics, "process-latency-avg");
         double avgPutLatency = getMetricValue(metrics, "put-latency-avg");
         double avgGetLatency = getMetricValue(metrics, "get-latency-avg");
+        double getRate = getMetricValue(metrics, "get-rate");
+        double putRate = getMetricValue(metrics, "put-rate");
+        double processRate = getMetricValue(metrics, "process-rate");
 
         double throughput = (totalRecords / runtimeMs) * 1000;
 
@@ -211,8 +285,8 @@ public class StatefulStreamsRunner {
         System.out.printf("║ Total Records:        %.0f%n", totalRecords);
         System.out.printf("║ Throughput:           %.2f records/sec%n", throughput);
         System.out.printf("║ Avg Process Latency:  %.2f ms%n", avgProcessLatency);
-        System.out.printf("║ Avg PUT Latency:      %.2f ms  ← SERIALIZATION%n", avgPutLatency);
-        System.out.printf("║ Avg GET Latency:      %.2f ms  ← DESERIALIZATION%n", avgGetLatency);
+        System.out.printf("║ Avg PUT Latency:      %.2f ms  ← SERIALIZATION%n", avgPutLatency / 1000);
+        System.out.printf("║ Avg GET Latency:      %.2f ms  ← DESERIALIZATION%n", avgGetLatency / 1000);
         System.out.println("╚═══════════════════════════════════════════════════╝\n");
     }
 
