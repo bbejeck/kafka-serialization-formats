@@ -53,6 +53,8 @@ public class KafkaStreamsRunner {
     private final Serde<StockProto> stockProtoSerde = Serdes.serdeFrom(new ProtoSerializer(), new ProtoDeserializer());
     private final Serde<TradeAggregateProto> tradeAggregateProtoSerde = Serdes.serdeFrom(new TradeAggregateProtoSerializer(), new TradeAggregateProtoDeserializer());
     private final Serde<String> stringSerde = Serdes.String();
+    private static final String THREAD_METRICS_GROUP = "stream-thread-metrics";
+    private static final String STATE_METRICS_GROUP = "stream-state-metrics";
 
     private static Instant startTime;
 
@@ -260,13 +262,13 @@ public class KafkaStreamsRunner {
         Map<MetricName, ? extends Metric> metrics = streams.metrics();
         long runtimeMs = System.currentTimeMillis() - startTime.toEpochMilli();
 
-        double totalRecords = getMetricValue(metrics, "stream-thread-metrics", "process-total");
-        double processRate = getMetricValue(metrics, "stream-thread-metric", "process-rate");
-        double avgProcessLatency = getMetricValue(metrics, "stream-thread-metrics", "process-latency-avg");
-        double avgPutLatency = getMetricValue(metrics, "stream-state-metrics", "put-latency-avg");
-        double avgGetLatency = getMetricValue(metrics, "stream-state-metrics", "get-latency-avg");
-        double getRate = getMetricValue(metrics, "stream-state-metrics", "get-rate");
-        double putRate = getMetricValue(metrics, "stream-state-metrics", "put-rate");
+        double totalRecords = getMetricValue(metrics, THREAD_METRICS_GROUP, "process-total");
+        double processRate = getMetricValue(metrics, THREAD_METRICS_GROUP, "process-rate");
+        double avgProcessLatency = getMetricValue(metrics, THREAD_METRICS_GROUP, "process-latency-avg");
+        double avgPutLatency = getMetricValue(metrics, STATE_METRICS_GROUP, "put-latency-avg");
+        double avgGetLatency = getMetricValue(metrics, STATE_METRICS_GROUP, "get-latency-avg");
+        double getRate = getMetricValue(metrics, STATE_METRICS_GROUP, "get-rate");
+        double putRate = getMetricValue(metrics, STATE_METRICS_GROUP, "put-rate");
 
         System.out.println("\n╔═══════════════════════════════════════════════════╗");
         System.out.printf("║ Streams Metrics SUMMARY - %s%n", format.toUpperCase());
