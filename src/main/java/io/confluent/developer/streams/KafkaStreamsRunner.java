@@ -268,20 +268,17 @@ public class KafkaStreamsRunner {
         double putRate = getMetricValue(metrics, "put-rate");
         double processRate = getMetricValue(metrics, "process-rate");
 
-        double throughput = (totalRecords / runtimeMs) * 1000;
-
         System.out.println("\n╔═══════════════════════════════════════════════════╗");
         System.out.printf("║ Streams Metrics SUMMARY - %s%n", format.toUpperCase());
         System.out.println("╠═══════════════════════════════════════════════════╣");
         System.out.printf("║ Runtime:              %d seconds%n", runtimeMs / 1000);
         System.out.printf("║ Total Records:        %.0f%n", totalRecords);
-        System.out.printf("║ Throughput:           %.2f records/sec%n", throughput);
-        System.out.printf("║ Avg Process Latency:  %.2f ms%n", avgProcessLatency);
-        System.out.printf("║ Avg PUT Latency:      %.2f ns  ← SERIALIZATION%n", avgPutLatency / 1000.0);
-        System.out.printf("║ Avg GET Latency:      %.2f ns  ← DESERIALIZATION%n", avgGetLatency / 1000.0);
         System.out.printf("║ Process Rate:         %.2f ops/sec%n", processRate);
+        System.out.printf("║ Avg Process Latency:  %.2f ms%n", avgProcessLatency);
         System.out.printf("║ PUT Rate:             %.2f ops/sec%n", putRate);
+        System.out.printf("║ Avg PUT Latency:      %.2f ns  ← SERIALIZATION%n", avgPutLatency / 1000.0);
         System.out.printf("║ GET Rate:             %.2f ops/sec%n", getRate);
+        System.out.printf("║ Avg GET Latency:      %.2f ns  ← DESERIALIZATION%n", avgGetLatency / 1000.0);
         System.out.println("╚═══════════════════════════════════════════════════╝\n");
     }
 
