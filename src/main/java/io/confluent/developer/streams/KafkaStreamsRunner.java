@@ -277,8 +277,11 @@ public class KafkaStreamsRunner {
         System.out.printf("║ Total Records:        %.0f%n", totalRecords);
         System.out.printf("║ Throughput:           %.2f records/sec%n", throughput);
         System.out.printf("║ Avg Process Latency:  %.2f ms%n", avgProcessLatency);
-        System.out.printf("║ Avg PUT Latency:      %.2f ms  ← SERIALIZATION%n", avgPutLatency / 1000);
-        System.out.printf("║ Avg GET Latency:      %.2f ms  ← DESERIALIZATION%n", avgGetLatency / 1000);
+        System.out.printf("║ Avg PUT Latency:      %.2f ns  ← SERIALIZATION%n", avgPutLatency / 1000.0);
+        System.out.printf("║ Avg GET Latency:      %.2f ns  ← DESERIALIZATION%n", avgGetLatency / 1000.0);
+        System.out.printf("║ Process Rate:         %.2f ops/sec%n", processRate);
+        System.out.printf("║ PUT Rate:             %.2f ops/sec%n", putRate);
+        System.out.printf("║ GET Rate:             %.2f ops/sec%n", getRate);
         System.out.println("╚═══════════════════════════════════════════════════╝\n");
     }
 
