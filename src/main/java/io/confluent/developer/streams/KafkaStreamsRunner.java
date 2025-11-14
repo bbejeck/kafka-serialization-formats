@@ -260,13 +260,13 @@ public class KafkaStreamsRunner {
         Map<MetricName, ? extends Metric> metrics = streams.metrics();
         long runtimeMs = System.currentTimeMillis() - startTime.toEpochMilli();
 
-        double totalRecords = getMetricValue(metrics, "process-total");
-        double avgProcessLatency = getMetricValue(metrics, "process-latency-avg");
-        double avgPutLatency = getMetricValue(metrics, "put-latency-avg");
-        double avgGetLatency = getMetricValue(metrics, "get-latency-avg");
-        double getRate = getMetricValue(metrics, "get-rate");
-        double putRate = getMetricValue(metrics, "put-rate");
-        double processRate = getMetricValue(metrics, "process-rate");
+        double totalRecords = getMetricValue(metrics, "stream-thread-metrics", "process-total");
+        double processRate = getMetricValue(metrics, "stream-thread-metric", "process-rate");
+        double avgProcessLatency = getMetricValue(metrics, "stream-thread-metrics", "process-latency-avg");
+        double avgPutLatency = getMetricValue(metrics, "stream-state-metrics", "put-latency-avg");
+        double avgGetLatency = getMetricValue(metrics, "stream-state-metrics", "get-latency-avg");
+        double getRate = getMetricValue(metrics, "stream-state-metrics", "get-rate");
+        double putRate = getMetricValue(metrics, "stream-state-metrics", "put-rate");
 
         System.out.println("\n╔═══════════════════════════════════════════════════╗");
         System.out.printf("║ Streams Metrics SUMMARY - %s%n", format.toUpperCase());
@@ -274,7 +274,7 @@ public class KafkaStreamsRunner {
         System.out.printf("║ Runtime:              %d seconds%n", runtimeMs / 1000);
         System.out.printf("║ Total Records:        %.0f%n", totalRecords);
         System.out.printf("║ Process Rate:         %.2f ops/sec%n", processRate);
-        System.out.printf("║ Avg Process Latency:  %.2f ms%n", avgProcessLatency);
+        System.out.printf("║ Avg Process Latency:  %.2f ms%n", avgProcessLatency / 1000.0);
         System.out.printf("║ PUT Rate:             %.2f ops/sec%n", putRate);
         System.out.printf("║ Avg PUT Latency:      %.2f ms%n", avgPutLatency / 1000.0);
         System.out.printf("║ GET Rate:             %.2f ops/sec%n", getRate);
@@ -282,8 +282,9 @@ public class KafkaStreamsRunner {
         System.out.println("╚═══════════════════════════════════════════════════╝\n");
     }
 
-    public static double getMetricValue(Map<MetricName, ? extends Metric> metrics, String metricName) {
+    public static double getMetricValue(Map<MetricName, ? extends Metric> metrics, String groupName, String metricName) {
         return metrics.entrySet().stream()
+                .filter(entry -> entry.getKey().group().equals(groupName))
                 .filter(entry -> entry.getKey().name().equals(metricName))
                 .findFirst()
                 .map(entry -> {
