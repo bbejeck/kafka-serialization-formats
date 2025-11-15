@@ -30,7 +30,7 @@ public class ProducerRunner {
     private static final String PROTO = "proto";
     private static final String SBE = "sbe";
     private static final String FORY = "fory";
-    private static final int SECONDS_TO_RUN = 900;
+    private static final int SECONDS_TO_RUN = 30 * 60;
 
 
     public static void main(String[] args) throws InterruptedException{

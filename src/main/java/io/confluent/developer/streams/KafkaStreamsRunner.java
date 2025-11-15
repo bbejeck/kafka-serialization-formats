@@ -21,8 +21,11 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.state.SessionStore;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -59,13 +62,13 @@ public class KafkaStreamsRunner {
     private static Instant startTime;
 
     public static void main(String[] args) throws Exception {
-        if (args.length < 2) {
+        if (args.length < 1) {
             System.out.println("Usage: StatefulStreamsRunner <json|sbe|fory|proto> <durationSeconds>");
             System.exit(1);
         }
 
         String format = args[0].toLowerCase();
-        int durationSeconds = Integer.parseInt(args[1]);
+        int durationSeconds = 30 * 60;
 
         Properties props = getStreamsConfig(format);
         StreamsBuilder builder = new StreamsBuilder();
@@ -252,6 +255,7 @@ public class KafkaStreamsRunner {
             latch.countDown();
         }));
 
+        streams.cleanUp();
         streams.start();
         latch.await(durationSeconds, TimeUnit.SECONDS);
         printMetricsSummary(streams, format);
@@ -270,18 +274,43 @@ public class KafkaStreamsRunner {
         double getRate = getMetricValue(metrics, STATE_METRICS_GROUP, "get-rate");
         double putRate = getMetricValue(metrics, STATE_METRICS_GROUP, "put-rate");
 
-        System.out.println("\n╔═══════════════════════════════════════════════════╗");
-        System.out.printf("║ Streams Metrics SUMMARY - %s%n", format.toUpperCase());
-        System.out.println("╠═══════════════════════════════════════════════════╣");
-        System.out.printf("║ Runtime:              %d seconds%n", runtimeMs / 1000);
-        System.out.printf("║ Total Records:        %.0f%n", totalRecords);
-        System.out.printf("║ Process Rate:         %.2f ops/sec%n", processRate);
-        System.out.printf("║ Avg Process Latency:  %.2f ns%n", avgProcessLatency);
-        System.out.printf("║ PUT Rate:             %.2f ops/sec%n", putRate);
-        System.out.printf("║ Avg PUT Latency:      %.2f ns%n", avgPutLatency);
-        System.out.printf("║ GET Rate:             %.2f ops/sec%n", getRate);
-        System.out.printf("║ Avg GET Latency:      %.2f ns%n", avgGetLatency);
-        System.out.println("╚═══════════════════════════════════════════════════╝\n");
+        String output = String.format("""
+                    
+                    ╔═══════════════════════════════════════════════════╗
+                    ║ Streams Metrics SUMMARY - %s
+                    ╠═══════════════════════════════════════════════════╣
+                    ║ Runtime:              %d seconds
+                    ║ Total Records:        %.0f
+                    ║ Process Rate:         %.2f ops/sec
+                    ║ Avg Process Latency:  %.2f ns
+                    ║ PUT Rate:             %.2f ops/sec
+                    ║ Avg PUT Latency:      %.2f ns
+                    ║ GET Rate:             %.2f ops/sec
+                    ║ Avg GET Latency:      %.2f ns
+                    ╚═══════════════════════════════════════════════════╝
+                    
+                    """,
+                format.toUpperCase() + " - " + LocalDateTime.now(),
+                runtimeMs / 1000,
+                totalRecords,
+                processRate,
+                avgProcessLatency,
+                putRate,
+                avgPutLatency,
+                getRate,
+                avgGetLatency
+        );
+
+        // Print to stdout
+        System.out.print(output);
+
+        // Append to file
+        String fileName = format.toLowerCase() + "-metrics.txt";
+        try (FileWriter writer = new FileWriter(fileName, true)) {
+            writer.write(output);
+        } catch (IOException e) {
+            System.err.println("Error writing to file: " + e.getMessage());
+        }
     }
 
     public static double getMetricValue(Map<MetricName, ? extends Metric> metrics, String groupName, String metricName) {
