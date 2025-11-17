@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -47,6 +48,7 @@ public class KafkaStreamsRunner {
     private static final String SBE = "sbe";
     private static final String FORY = "fory";
     private static final String PROTO = "proto";
+    private static final String HYBRID = "hybrid";
     private final Serde<TradeAggregateDto> tradeAggregateDtoSerde = Serdes.serdeFrom(new TradeAggregateDtoSerializer(), new TradeAggregateDtoDeserializer());
     private final Serde<StockTradeDto> stockTradeDtoSerde = Serdes.serdeFrom(new StockTradeDtoSerializer(), new StockTradeDtoDeserializer());
     private final Serde<Stock> foryStockSerde = Serdes.serdeFrom(new ForySerializer(), new ForyDeserializer());
@@ -79,6 +81,7 @@ public class KafkaStreamsRunner {
             case SBE -> streamsRunner.buildSbeTopology(builder);
             case FORY -> streamsRunner.buildForyTopology(builder);
             case PROTO -> streamsRunner.buildProtoTopology(builder);
+            case HYBRID -> streamsRunner.buildHybridProtoSbeTopology(builder);
             default -> {
                 System.out.println("Invalid format: " + format);
                 System.exit(1);
@@ -186,6 +189,51 @@ public class KafkaStreamsRunner {
                 );
     }
 
+    private void buildHybridProtoSbeTopology(StreamsBuilder builder) {
+        KStream<String, StockProto> trades = builder.stream("proto-input",
+                Consumed.with(stringSerde, stockProtoSerde));
+
+          trades.selectKey((key, stock) -> stock.getSymbol())
+                .groupByKey(Grouped.with(stringSerde, stockProtoSerde))
+                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofSeconds(30)))
+                .aggregate(TradeAggregateDto::new,
+                        (key, stock, aggregate) -> {
+                            // Update DTO
+                            aggregate.totalVolume(aggregate.totalVolume() + (stock.getShares() * stock.getPrice()));
+                            long newCount = aggregate.tradeCount() + 1;
+                            aggregate.volumeWeightedPrice(
+                                    (aggregate.volumeWeightedPrice() * aggregate.tradeCount() + stock.getPrice()) / newCount
+                            );
+                            aggregate.tradeCount(newCount);
+                            aggregate.minPrice(newCount == 1 ? stock.getPrice() : Math.min(aggregate.minPrice(), stock.getPrice()));
+                            aggregate.maxPrice(newCount == 1 ? stock.getPrice() : Math.max(aggregate.maxPrice(), stock.getPrice()));
+                            return aggregate;
+                        },
+                        (key, agg1, agg2) -> {
+                            // Merge DTOs
+                            TradeAggregateDto merged = new TradeAggregateDto();
+                            long totalCount = agg1.tradeCount() + agg2.tradeCount();
+                            merged.tradeCount(totalCount);
+                            merged.totalVolume(agg1.totalVolume() + agg2.totalVolume());
+                            merged.volumeWeightedPrice(
+                                    (agg1.volumeWeightedPrice() * agg1.tradeCount() +
+                                            agg2.volumeWeightedPrice() * agg2.tradeCount()) / totalCount
+                            );
+                            merged.minPrice(Math.min(agg1.minPrice(), agg2.minPrice()));
+                            merged.maxPrice(Math.max(agg1.maxPrice(), agg2.maxPrice()));
+                            return merged;
+                        },
+                        Materialized.<String, TradeAggregateDto, SessionStore<Bytes, byte[]>>as("trade-aggregates-sbeDto")
+                                .withKeySerde(stringSerde)
+                                .withValueSerde(tradeAggregateDtoSerde)
+                )
+                .toStream()
+                .to("sbe-output", Produced.with(
+                        WindowedSerdes.sessionWindowedSerdeFrom(String.class),
+                        tradeAggregateDtoSerde)
+                );
+    }
+
     private void buildProtoTopology(StreamsBuilder builder) {
         KStream<String, StockProto> trades = builder.stream("proto-input",
                 Consumed.with(stringSerde, stockProtoSerde));
@@ -290,7 +338,7 @@ public class KafkaStreamsRunner {
                     ╚═══════════════════════════════════════════════════╝
                     
                     """,
-                format.toUpperCase() + " - " + LocalDateTime.now(),
+                format.toUpperCase() + " - " + LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES),
                 runtimeMs / 1000,
                 totalRecords,
                 processRate,
